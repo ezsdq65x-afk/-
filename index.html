@@ -301,18 +301,50 @@ $("calc").addEventListener("click",calc);
 updateTube();
 </script>
 
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 (function(){
  const btn=document.getElementById('weightCamera'), file=document.getElementById('weightPhoto'), status=document.getElementById('weightReadStatus'), total=document.getElementById('totalKg');
  btn.addEventListener('click',()=>file.click());
+
+ function loadImage(f){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=URL.createObjectURL(f);});}
+ function makeCanvas(img,mode){
+   const max=1800, scale=Math.min(1,max/Math.max(img.width,img.height));
+   const c=document.createElement('canvas'); c.width=Math.round(img.width*scale); c.height=Math.round(img.height*scale);
+   const x=c.getContext('2d',{willReadFrequently:true}); x.drawImage(img,0,0,c.width,c.height);
+   if(mode==='contrast'){
+     const d=x.getImageData(0,0,c.width,c.height), a=d.data;
+     for(let i=0;i<a.length;i+=4){const g=.299*a[i]+.587*a[i+1]+.114*a[i+2]; const v=g>105?255:0; a[i]=a[i+1]=a[i+2]=v;}
+     x.putImageData(d,0,0);
+   }
+   return c;
+ }
+ function pickWeight(text){
+   const nums=(text.match(/\d+(?:[.,]\d+)?/g)||[]).map(v=>Number(v.replace(',','.'))).filter(n=>Number.isFinite(n)&&n>0&&n<10000);
+   if(!nums.length)return null;
+   const ints=nums.filter(n=>Number.isInteger(n)&&n>=10&&n<=5000);
+   return (ints.length?ints:nums).sort((a,b)=>String(b).length-String(a).length)[0];
+ }
+ async function ocr(canvas){
+   const r=await Tesseract.recognize(canvas,'eng',{logger:m=>{if(m.status==='recognizing text')status.textContent='重量を読取中… '+Math.round((m.progress||0)*100)+'%';}});
+   return r.data.text||'';
+ }
  file.addEventListener('change',async()=>{
-   if(!file.files||!file.files[0]) return;
-   status.textContent='写真を選びました。数字を確認して入力してください。';
-   // Browser-only GitHub Pages cannot reliably OCR photos offline on iPhone without bundling an OCR engine.
-   // Keep camera capture ready and offer a quick confirmation prompt as a safe fallback.
-   const v=prompt('秤に表示された重量（kg）を確認して入力してください。例：839');
-   if(v!==null){ const n=parseFloat(String(v).replace(/[^0-9.]/g,'')); if(Number.isFinite(n)){ total.value=n; status.textContent='読み取り確認：'+n+' kg を総重量に入力しました。'; total.dispatchEvent(new Event('change')); } }
-   file.value='';
+   if(!file.files||!file.files[0])return;
+   try{
+     status.textContent='写真から重量を読取中…'; btn.disabled=true;
+     const img=await loadImage(file.files[0]);
+     let text=await ocr(makeCanvas(img,'normal')); let n=pickWeight(text);
+     if(n===null){text=await ocr(makeCanvas(img,'contrast')); n=pickWeight(text);}
+     if(n!==null){
+       total.value=n; status.textContent='✓ '+n+' kg を総重量に自動入力しました。違う場合は総重量欄をタップして修正できます。';
+       total.dispatchEvent(new Event('change'));
+     }else{
+       status.textContent='数字を読取れませんでした。表示部分を大きく写してもう一度撮影するか、総重量を手入力してください。';
+     }
+   }catch(e){
+     console.error(e); status.textContent='読取りに失敗しました。もう一度撮影するか、総重量を手入力してください。';
+   }finally{btn.disabled=false;file.value='';}
  });
 })();
 </script>
