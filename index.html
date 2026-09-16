@@ -41,7 +41,7 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <div><label>総重量（kg）</label><input id="totalKg" type="number" step="0.1" inputmode="decimal" placeholder="例：1530">
 <button type="button" id="weightCamera" style="margin-top:8px;width:100%;padding:12px;border:1px solid #cbd3df;border-radius:12px;background:#fff;font-weight:800;font-size:16px">📷 重量をカメラで読取</button>
 <input id="weightPhoto" type="file" accept="image/*" capture="environment" hidden>
-<div id="weightReadStatus" class="hint" data-version="sevenseg-v2">秤の数字を撮影すると、端末の文字認識で総重量へ入力します。</div></div>
+<div id="weightReadStatus" class="hint" data-version="sevenseg-v3-20fix">秤の数字を撮影すると、端末の文字認識で総重量へ入力します。</div></div>
 <div><label>製品幅（mm）</label><input id="width" type="number" step="1" inputmode="decimal" placeholder="例：400"></div>
 <div><label>製品厚み（mm）</label><input id="thickness" type="number" step="0.01" inputmode="decimal" placeholder="例：0.50"></div>
 </div>
@@ -358,25 +358,32 @@ updateTube();
 
  function detectDisplayBand(mask,w,h){
    const rows=new Uint32Array(h);
-   let max=0, peak=0;
+   let max=0;
    for(let y=0;y<h;y++){
      let n=0, base=y*w;
      for(let x=0;x<w;x++) n+=mask[base+x];
      rows[y]=n;
-     if(n>max){max=n;peak=y;}
+     if(n>max) max=n;
    }
    if(max<8) return null;
 
-   const threshold=Math.max(3,Math.floor(max*0.12));
+   // 低めのしきい値で7セグ数字の上段～下段をひとまとまりにする
+   const threshold=Math.max(2,Math.floor(max*0.03));
    const gs=groups1D(rows,threshold);
-   let best=null;
+   if(!gs.length) return null;
+
+   // 行方向の緑画素量が最も多い帯を主表示とみなす
+   let best=null, bestScore=-1;
    for(const g of gs){
-     if(peak>=g[0] && peak<=g[1]){best=g;break;}
+     if((g[1]-g[0]+1)<20) continue;
+     let score=0;
+     for(let y=g[0];y<=g[1];y++) score+=rows[y];
+     if(score>bestScore){bestScore=score;best=g;}
    }
-   if(!best) best=gs.sort((a,b)=>(b[1]-b[0])-(a[1]-a[0]))[0];
    if(!best) return null;
 
-   const pad=Math.max(4,Math.round((best[1]-best[0]+1)*0.04));
+   const H=best[1]-best[0]+1;
+   const pad=Math.max(4,Math.round(H*0.04));
    return [Math.max(0,best[0]-pad),Math.min(h-1,best[1]+pad)];
  }
 
@@ -390,24 +397,38 @@ updateTube();
      if(n>max) max=n;
    }
    if(max<5) return [];
-   const threshold=Math.max(2,Math.floor(max*0.08));
+
+   const threshold=Math.max(2,Math.floor(max*0.03));
    let gs=groups1D(cols,threshold);
+   const bandH=y1-y0+1;
 
-   // 小さなノイズを除外
-   const minW=Math.max(5,Math.round(w*0.012));
-   gs=gs.filter(g=>(g[1]-g[0]+1)>=minW);
+   // 小さすぎるゴミを除去
+   gs=gs.filter(g=>(g[1]-g[0]+1)>=4);
+   if(!gs.length) return [];
 
-   // 近接する分割を結合
-   const merged=[];
-   for(const g of gs){
-     if(!merged.length){merged.push(g);continue;}
-     const prev=merged[merged.length-1];
-     const gap=g[0]-prev[1]-1;
-     if(gap<Math.max(3,Math.round((y1-y0+1)*0.035))){
-       prev[1]=g[1];
-     }else merged.push(g);
-   }
-   return merged;
+   const maxW=Math.max(...gs.map(g=>g[1]-g[0]+1));
+
+   // 矢印・下側表示などを除外。
+   // 「1」は細いので、幅だけでなく縦方向の高さも見て残す。
+   gs=gs.filter(g=>{
+     const ww=g[1]-g[0]+1;
+     let minY=y1, maxY=y0, found=false;
+     for(let x=g[0];x<=g[1];x++){
+       for(let y=y0;y<=y1;y++){
+         if(mask[y*w+x]){
+           found=true;
+           if(y<minY) minY=y;
+           if(y>maxY) maxY=y;
+         }
+       }
+     }
+     const span=found ? (maxY-minY+1) : 0;
+     return ww>=maxW*0.35 || span>=bandH*0.55;
+   });
+
+   // 重要: 隣接する数字は結合しない。
+   // 例「20」は2と0の間隔が数pxしかないため、結合すると「2」と誤読する。
+   return gs;
  }
 
  function density(mask,w,h,x0,x1,y0,y1){
@@ -424,7 +445,7 @@ updateTube();
    const W=gx1-gx0+1, H=y1-y0+1;
 
    // 「1」は他の数字よりかなり細い
-   if(medianW && W < medianW*0.58) return '1';
+   if(medianW && W < medianW*0.52) return '1';
 
    const R={
      a:[.18,.82,.00,.18],
