@@ -41,7 +41,7 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <div><label>総重量（kg）</label><input id="totalKg" type="number" step="0.1" inputmode="decimal" placeholder="例：1530">
 <button type="button" id="weightCamera" style="margin-top:8px;width:100%;padding:12px;border:1px solid #cbd3df;border-radius:12px;background:#fff;font-weight:800;font-size:16px">📷 重量をカメラで読取</button>
 <input id="weightPhoto" type="file" accept="image/*" capture="environment" hidden>
-<div id="weightReadStatus" class="hint">秤の数字を撮影すると、端末の文字認識で総重量へ入力します。</div></div>
+<div id="weightReadStatus" class="hint" data-version="sevenseg-v2">秤の数字を撮影すると、端末の文字認識で総重量へ入力します。</div></div>
 <div><label>製品幅（mm）</label><input id="width" type="number" step="1" inputmode="decimal" placeholder="例：400"></div>
 <div><label>製品厚み（mm）</label><input id="thickness" type="number" step="0.01" inputmode="decimal" placeholder="例：0.50"></div>
 </div>
@@ -304,49 +304,273 @@ updateTube();
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script>
 (function(){
- const btn=document.getElementById('weightCamera'), file=document.getElementById('weightPhoto'), status=document.getElementById('weightReadStatus'), total=document.getElementById('totalKg');
+ const btn=document.getElementById('weightCamera');
+ const file=document.getElementById('weightPhoto');
+ const status=document.getElementById('weightReadStatus');
+ const total=document.getElementById('totalKg');
+
  btn.addEventListener('click',()=>file.click());
 
- function loadImage(f){return new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=reject;img.src=URL.createObjectURL(f);});}
- function makeCanvas(img,mode){
-   const max=1800, scale=Math.min(1,max/Math.max(img.width,img.height));
-   const c=document.createElement('canvas'); c.width=Math.round(img.width*scale); c.height=Math.round(img.height*scale);
-   const x=c.getContext('2d',{willReadFrequently:true}); x.drawImage(img,0,0,c.width,c.height);
-   if(mode==='contrast'){
-     const d=x.getImageData(0,0,c.width,c.height), a=d.data;
-     for(let i=0;i<a.length;i+=4){const g=.299*a[i]+.587*a[i+1]+.114*a[i+2]; const v=g>105?255:0; a[i]=a[i+1]=a[i+2]=v;}
-     x.putImageData(d,0,0);
-   }
+ function loadImage(f){
+   return new Promise((resolve,reject)=>{
+     const img=new Image();
+     const url=URL.createObjectURL(f);
+     img.onload=()=>{URL.revokeObjectURL(url);resolve(img);};
+     img.onerror=(e)=>{URL.revokeObjectURL(url);reject(e);};
+     img.src=url;
+   });
+ }
+
+ function drawScaled(img,maxSide=1600){
+   const scale=Math.min(1,maxSide/Math.max(img.naturalWidth||img.width,img.naturalHeight||img.height));
+   const c=document.createElement('canvas');
+   c.width=Math.max(1,Math.round((img.naturalWidth||img.width)*scale));
+   c.height=Math.max(1,Math.round((img.naturalHeight||img.height)*scale));
+   const ctx=c.getContext('2d',{willReadFrequently:true});
+   ctx.drawImage(img,0,0,c.width,c.height);
    return c;
  }
- function pickWeight(text){
-   const nums=(text.match(/\d+(?:[.,]\d+)?/g)||[]).map(v=>Number(v.replace(',','.'))).filter(n=>Number.isFinite(n)&&n>0&&n<10000);
-   if(!nums.length)return null;
-   const ints=nums.filter(n=>Number.isInteger(n)&&n>=10&&n<=5000);
-   return (ints.length?ints:nums).sort((a,b)=>String(b).length-String(a).length)[0];
+
+ function greenMask(canvas){
+   const ctx=canvas.getContext('2d',{willReadFrequently:true});
+   const im=ctx.getImageData(0,0,canvas.width,canvas.height);
+   const a=im.data, w=canvas.width, h=canvas.height;
+   const m=new Uint8Array(w*h);
+   for(let i=0,p=0;i<a.length;i+=4,p++){
+     const r=a[i], g=a[i+1], b=a[i+2];
+     // 緑色LEDの7セグ表示を抽出
+     if(g>80 && g>r*1.22 && g>b*1.10 && (g-r)>22) m[p]=1;
+   }
+   return {mask:m,w,h};
  }
- async function ocr(canvas){
-   const r=await Tesseract.recognize(canvas,'eng',{logger:m=>{if(m.status==='recognizing text')status.textContent='重量を読取中… '+Math.round((m.progress||0)*100)+'%';}});
-   return r.data.text||'';
+
+ function groups1D(values,threshold){
+   const out=[];
+   let s=-1;
+   for(let i=0;i<values.length;i++){
+     const on=values[i]>=threshold;
+     if(on && s<0) s=i;
+     if(!on && s>=0){out.push([s,i-1]);s=-1;}
+   }
+   if(s>=0) out.push([s,values.length-1]);
+   return out;
  }
+
+ function detectDisplayBand(mask,w,h){
+   const rows=new Uint32Array(h);
+   let max=0, peak=0;
+   for(let y=0;y<h;y++){
+     let n=0, base=y*w;
+     for(let x=0;x<w;x++) n+=mask[base+x];
+     rows[y]=n;
+     if(n>max){max=n;peak=y;}
+   }
+   if(max<8) return null;
+
+   const threshold=Math.max(3,Math.floor(max*0.12));
+   const gs=groups1D(rows,threshold);
+   let best=null;
+   for(const g of gs){
+     if(peak>=g[0] && peak<=g[1]){best=g;break;}
+   }
+   if(!best) best=gs.sort((a,b)=>(b[1]-b[0])-(a[1]-a[0]))[0];
+   if(!best) return null;
+
+   const pad=Math.max(4,Math.round((best[1]-best[0]+1)*0.04));
+   return [Math.max(0,best[0]-pad),Math.min(h-1,best[1]+pad)];
+ }
+
+ function getDigitGroups(mask,w,y0,y1){
+   const cols=new Uint32Array(w);
+   let max=0;
+   for(let x=0;x<w;x++){
+     let n=0;
+     for(let y=y0;y<=y1;y++) n+=mask[y*w+x];
+     cols[x]=n;
+     if(n>max) max=n;
+   }
+   if(max<5) return [];
+   const threshold=Math.max(2,Math.floor(max*0.08));
+   let gs=groups1D(cols,threshold);
+
+   // 小さなノイズを除外
+   const minW=Math.max(5,Math.round(w*0.012));
+   gs=gs.filter(g=>(g[1]-g[0]+1)>=minW);
+
+   // 近接する分割を結合
+   const merged=[];
+   for(const g of gs){
+     if(!merged.length){merged.push(g);continue;}
+     const prev=merged[merged.length-1];
+     const gap=g[0]-prev[1]-1;
+     if(gap<Math.max(3,Math.round((y1-y0+1)*0.035))){
+       prev[1]=g[1];
+     }else merged.push(g);
+   }
+   return merged;
+ }
+
+ function density(mask,w,h,x0,x1,y0,y1){
+   x0=Math.max(0,Math.min(w-1,Math.floor(x0)));
+   x1=Math.max(x0+1,Math.min(w,Math.ceil(x1)));
+   y0=Math.max(0,Math.min(h-1,Math.floor(y0)));
+   y1=Math.max(y0+1,Math.min(h,Math.ceil(y1)));
+   let n=0, tot=(x1-x0)*(y1-y0);
+   for(let y=y0;y<y1;y++) for(let x=x0;x<x1;x++) n+=mask[y*w+x];
+   return tot? n/tot : 0;
+ }
+
+ function decodeDigit(mask,w,h,gx0,gx1,y0,y1,medianW){
+   const W=gx1-gx0+1, H=y1-y0+1;
+
+   // 「1」は他の数字よりかなり細い
+   if(medianW && W < medianW*0.58) return '1';
+
+   const R={
+     a:[.18,.82,.00,.18],
+     b:[.68,1.00,.10,.48],
+     c:[.68,1.00,.52,.90],
+     d:[.18,.82,.82,1.00],
+     e:[.00,.32,.52,.90],
+     f:[.00,.32,.10,.48],
+     g:[.18,.82,.41,.59]
+   };
+   const seg={};
+   for(const [k,r] of Object.entries(R)){
+     seg[k]=density(mask,w,h,
+       gx0+r[0]*W,gx0+r[1]*W,
+       y0+r[2]*H,y0+r[3]*H)>0.19;
+   }
+
+   const patterns={
+     '0':'abcdef','1':'bc','2':'abdeg','3':'abcdg','4':'bcfg',
+     '5':'acdfg','6':'acdefg','7':'abc','8':'abcdefg','9':'abcdfg'
+   };
+   const keys='abcdefg';
+   let best=null,bestDist=99;
+   for(const [digit,p] of Object.entries(patterns)){
+     let d=0;
+     for(const k of keys){
+       const want=p.includes(k);
+       if(seg[k]!==want) d++;
+     }
+     if(d<bestDist){bestDist=d;best=digit;}
+   }
+   return bestDist<=1 ? best : null;
+ }
+
+ function detectSevenSegment(canvas){
+   const {mask,w,h}=greenMask(canvas);
+   const band=detectDisplayBand(mask,w,h);
+   if(!band) return null;
+   const [y0,y1]=band;
+   let groups=getDigitGroups(mask,w,y0,y1);
+   if(!groups.length) return null;
+
+   // 最大4桁程度を想定し、幅・位置から主表示の候補を選択
+   const widths=groups.map(g=>g[1]-g[0]+1).sort((a,b)=>a-b);
+   const medianW=widths[Math.floor(widths.length/2)] || 0;
+
+   // 極端に小さいグループは矢印等のノイズ
+   groups=groups.filter(g=>{
+     const ww=g[1]-g[0]+1;
+     return ww>=Math.max(7,medianW*0.30);
+   });
+
+   // 左から右に最大4桁
+   groups=groups.slice(0,4);
+   if(!groups.length) return null;
+
+   let s='';
+   for(const g of groups){
+     const d=decodeDigit(mask,w,h,g[0],g[1],y0,y1,medianW);
+     if(d===null) return null;
+     s+=d;
+   }
+   if(!/^\d{1,4}$/.test(s)) return null;
+   const n=Number(s);
+   return (n>0 && n<10000)?n:null;
+ }
+
+ function makeOcrCrop(canvas){
+   const {mask,w,h}=greenMask(canvas);
+   const band=detectDisplayBand(mask,w,h);
+   if(!band) return canvas;
+   const [y0,y1]=band;
+   const groups=getDigitGroups(mask,w,y0,y1);
+   if(!groups.length) return canvas;
+
+   const x0=Math.max(0,groups[0][0]-Math.round(w*.03));
+   const x1=Math.min(w-1,groups[groups.length-1][1]+Math.round(w*.03));
+   const yy0=Math.max(0,y0-Math.round((y1-y0+1)*.08));
+   const yy1=Math.min(h-1,y1+Math.round((y1-y0+1)*.08));
+
+   const out=document.createElement('canvas');
+   out.width=Math.max(1,(x1-x0+1)*3);
+   out.height=Math.max(1,(yy1-yy0+1)*3);
+   const o=out.getContext('2d',{willReadFrequently:true});
+   o.imageSmoothingEnabled=true;
+   o.drawImage(canvas,x0,yy0,x1-x0+1,yy1-yy0+1,0,0,out.width,out.height);
+
+   // 緑LEDを白、その他を黒へ2値化
+   const im=o.getImageData(0,0,out.width,out.height), a=im.data;
+   for(let i=0;i<a.length;i+=4){
+     const r=a[i],g=a[i+1],b=a[i+2];
+     const on=(g>75 && g>r*1.18 && g>b*1.08 && (g-r)>18);
+     const v=on?255:0;
+     a[i]=a[i+1]=a[i+2]=v;
+   }
+   o.putImageData(im,0,0);
+   return out;
+ }
+
+ async function ocrFallback(canvas){
+   if(typeof Tesseract==='undefined') return null;
+   status.textContent='予備の文字認識で確認中…';
+   const crop=makeOcrCrop(canvas);
+   const r=await Tesseract.recognize(crop,'eng',{
+     logger:m=>{
+       if(m.status==='recognizing text')
+         status.textContent='予備の文字認識で確認中… '+Math.round((m.progress||0)*100)+'%';
+     }
+   });
+   const txt=(r.data.text||'').replace(/[^\d]/g,'');
+   if(!txt) return null;
+   const n=Number(txt.slice(0,4));
+   return (n>0 && n<10000)?n:null;
+ }
+
  file.addEventListener('change',async()=>{
-   if(!file.files||!file.files[0])return;
+   if(!file.files||!file.files[0]) return;
    try{
-     status.textContent='写真から重量を読取中…'; btn.disabled=true;
+     btn.disabled=true;
+     status.textContent='秤の緑色表示を解析中…';
      const img=await loadImage(file.files[0]);
-     let text=await ocr(makeCanvas(img,'normal')); let n=pickWeight(text);
-     if(n===null){text=await ocr(makeCanvas(img,'contrast')); n=pickWeight(text);}
+     const canvas=drawScaled(img);
+
+     let n=detectSevenSegment(canvas);
+
+     if(n===null){
+       n=await ocrFallback(canvas);
+     }
+
      if(n!==null){
-       total.value=n; status.textContent='✓ '+n+' kg を総重量に自動入力しました。違う場合は総重量欄をタップして修正できます。';
+       total.value=n;
+       status.textContent='✓ '+n+' kg を総重量に自動入力しました。違う場合は総重量欄をタップして修正できます。';
        total.dispatchEvent(new Event('change'));
      }else{
-       status.textContent='数字を読取れませんでした。表示部分を大きく写してもう一度撮影するか、総重量を手入力してください。';
+       status.textContent='数字を正しく読取れませんでした。表示数字を画面中央に大きく写してもう一度撮影するか、総重量を手入力してください。';
      }
    }catch(e){
-     console.error(e); status.textContent='読取りに失敗しました。もう一度撮影するか、総重量を手入力してください。';
-   }finally{btn.disabled=false;file.value='';}
+     console.error(e);
+     status.textContent='読取りに失敗しました。もう一度撮影するか、総重量を手入力してください。';
+   }finally{
+     btn.disabled=false;
+     file.value='';
+   }
  });
 })();
 </script>
+
 </body>
 </html>
