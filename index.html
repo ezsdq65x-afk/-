@@ -26,6 +26,103 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 .total small{display:block;font-weight:800}.total b{font-size:46px}
 .err{color:#b42318;font-weight:800;margin-top:12px;white-space:pre-line}
 .ok{color:#1a6d40;font-weight:800;margin-top:12px;white-space:pre-line}
+
+/* ===== 大きめ10キー入力 UI ===== */
+.num-field{
+  cursor:pointer;
+  font-size:22px;
+  min-height:58px;
+  caret-color:transparent;
+}
+#totalKg{
+  border-color:#2f80ed;
+  background:#eef6ff;
+}
+#width{
+  border-color:#27ae60;
+  background:#effaf3;
+}
+#thickness{
+  border-color:#f2994a;
+  background:#fff6ec;
+}
+#calc{
+  background:#7b2cbf;
+  box-shadow:0 8px 18px rgba(123,44,191,.22);
+}
+#calc:active{transform:translateY(1px)}
+
+.keypad-backdrop{
+  position:fixed;
+  inset:0;
+  background:rgba(15,23,42,.38);
+  z-index:9998;
+  display:none;
+}
+.keypad{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  z-index:9999;
+  background:#eef1f6;
+  border-radius:26px 26px 0 0;
+  box-shadow:0 -12px 30px rgba(20,35,60,.18);
+  padding:14px 14px max(18px,env(safe-area-inset-bottom));
+  display:none;
+}
+.keypad.open,.keypad-backdrop.open{display:block}
+.keypad-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:0 auto 12px;
+  max-width:520px;
+}
+.keypad-title{
+  font-size:18px;
+  font-weight:900;
+}
+.keypad-value{
+  font-size:28px;
+  font-weight:900;
+  background:#fff;
+  border-radius:14px;
+  padding:8px 14px;
+  min-width:130px;
+  text-align:right;
+  border:2px solid #dce2eb;
+}
+.keypad-grid{
+  max-width:520px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+}
+.key{
+  min-height:68px;
+  margin:0;
+  padding:8px;
+  border-radius:16px;
+  background:#fff;
+  color:#172033;
+  font-size:30px;
+  font-weight:900;
+  border:1px solid #d7dde7;
+  box-shadow:0 2px 5px rgba(20,35,60,.08);
+}
+.key:active{background:#dde5f1}
+.key.action{font-size:22px;background:#dfe5ed}
+.key.done{
+  grid-column:1 / -1;
+  min-height:58px;
+  background:#172033;
+  color:#fff;
+  font-size:22px;
+}
+
 </style>
 </head>
 <body>
@@ -38,12 +135,12 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <div class="grid">
 <div><label>FNo</label><input id="fno" type="text" placeholder="任意"></div>
 <div><label>コイルNo</label><input id="coilNo" type="text" placeholder="任意"></div>
-<div><label>総重量（kg）</label><input id="totalKg" type="number" step="0.1" inputmode="decimal" placeholder="例：1530">
+<div><label>総重量（kg）</label><input id="totalKg" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力">
 <button type="button" id="weightCamera" style="margin-top:8px;width:100%;padding:12px;border:1px solid #cbd3df;border-radius:12px;background:#fff;font-weight:800;font-size:16px">📷 重量をカメラで読取</button>
 <input id="weightPhoto" type="file" accept="image/*" capture="environment" hidden>
-<div id="weightReadStatus" class="hint" data-version="sevenseg-v3-20fix">秤の数字を撮影すると、端末の文字認識で総重量へ入力します。</div></div>
-<div><label>製品幅（mm）</label><input id="width" type="number" step="1" inputmode="decimal" placeholder="例：400"></div>
-<div><label>製品厚み（mm）</label><input id="thickness" type="number" step="0.01" inputmode="decimal" placeholder="例：0.50"></div>
+<div id="weightReadStatus" class="hint" data-version="sevenseg-v4-custom-keypad-color-v1">秤の数字を撮影すると、端末の文字認識で総重量へ入力します。</div></div>
+<div><label>製品幅（mm）</label><input id="width" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力"></div>
+<div><label>製品厚み（mm）</label><input id="thickness" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力"></div>
 </div>
 <div class="hint">間紙とテープは、この「製品厚み」と「総重量」を使って換算表から計算します。間紙用・テープ用の別の厚み入力はありません。</div>
 </section>
@@ -444,39 +541,69 @@ updateTube();
  function decodeDigit(mask,w,h,gx0,gx1,y0,y1,medianW){
    const W=gx1-gx0+1, H=y1-y0+1;
 
-   // 「1」は他の数字よりかなり細い
+   // 「1」はかなり細い
    if(medianW && W < medianW*0.52) return '1';
 
-   const R={
-     a:[.18,.82,.00,.18],
-     b:[.68,1.00,.10,.48],
-     c:[.68,1.00,.52,.90],
-     d:[.18,.82,.82,1.00],
-     e:[.00,.32,.52,.90],
-     f:[.00,.32,.10,.48],
-     g:[.18,.82,.41,.59]
-   };
-   const seg={};
-   for(const [k,r] of Object.entries(R)){
-     seg[k]=density(mask,w,h,
-       gx0+r[0]*W,gx0+r[1]*W,
-       y0+r[2]*H,y0+r[3]*H)>0.19;
+   // 各セグメントの「線の強さ」を見る。
+   // 広い面積の平均ではなく、最も明るい横線/縦線を拾うので
+   // 反射で0を8と誤認しにくい。
+   function hStrength(yA,yB){
+     const xa=Math.max(gx0,Math.floor(gx0+W*0.18));
+     const xb=Math.min(gx1+1,Math.ceil(gx0+W*0.82));
+     const ya=Math.max(y0,Math.floor(y0+H*yA));
+     const yb=Math.min(y1+1,Math.ceil(y0+H*yB));
+     let best=0, width=Math.max(1,xb-xa);
+     for(let y=ya;y<yb;y++){
+       let n=0;
+       for(let x=xa;x<xb;x++) n+=mask[y*w+x];
+       best=Math.max(best,n/width);
+     }
+     return best;
    }
+
+   function vStrength(xA,xB,yA,yB){
+     const xa=Math.max(gx0,Math.floor(gx0+W*xA));
+     const xb=Math.min(gx1+1,Math.ceil(gx0+W*xB));
+     const ya=Math.max(y0,Math.floor(y0+H*yA));
+     const yb=Math.min(y1+1,Math.ceil(y0+H*yB));
+     let best=0, height=Math.max(1,yb-ya);
+     for(let x=xa;x<xb;x++){
+       let n=0;
+       for(let y=ya;y<yb;y++) n+=mask[y*w+x];
+       best=Math.max(best,n/height);
+     }
+     return best;
+   }
+
+   const strength={
+     a:hStrength(0.00,0.28),
+     g:hStrength(0.32,0.68),
+     d:hStrength(0.72,1.00),
+     f:vStrength(0.00,0.42,0.00,0.38),
+     b:vStrength(0.62,1.00,0.00,0.38),
+     e:vStrength(0.00,0.42,0.62,1.00),
+     c:vStrength(0.62,1.00,0.62,1.00)
+   };
+
+   const seg={};
+   for(const k of 'abcdefg') seg[k]=strength[k] > 0.52;
 
    const patterns={
      '0':'abcdef','1':'bc','2':'abdeg','3':'abcdg','4':'bcfg',
      '5':'acdfg','6':'acdefg','7':'abc','8':'abcdefg','9':'abcdfg'
    };
-   const keys='abcdefg';
+
    let best=null,bestDist=99;
    for(const [digit,p] of Object.entries(patterns)){
-     let d=0;
-     for(const k of keys){
+     let dist=0;
+     for(const k of 'abcdefg'){
        const want=p.includes(k);
-       if(seg[k]!==want) d++;
+       if(seg[k]!==want) dist++;
      }
-     if(d<bestDist){bestDist=d;best=digit;}
+     if(dist<bestDist){bestDist=dist;best=digit;}
    }
+
+   // 完全一致か、1箇所だけ曖昧な時のみ採用。
    return bestDist<=1 ? best : null;
  }
 
@@ -590,6 +717,112 @@ updateTube();
      file.value='';
    }
  });
+})();
+</script>
+
+
+<div id="keypadBackdrop" class="keypad-backdrop"></div>
+<div id="customKeypad" class="keypad" aria-hidden="true">
+  <div class="keypad-head">
+    <div id="keypadTitle" class="keypad-title">数字入力</div>
+    <div id="keypadValue" class="keypad-value">0</div>
+  </div>
+  <div class="keypad-grid">
+    <button type="button" class="key" data-key="1">1</button>
+    <button type="button" class="key" data-key="2">2</button>
+    <button type="button" class="key" data-key="3">3</button>
+    <button type="button" class="key" data-key="4">4</button>
+    <button type="button" class="key" data-key="5">5</button>
+    <button type="button" class="key" data-key="6">6</button>
+    <button type="button" class="key" data-key="7">7</button>
+    <button type="button" class="key" data-key="8">8</button>
+    <button type="button" class="key" data-key="9">9</button>
+    <button type="button" class="key" data-key=".">.</button>
+    <button type="button" class="key" data-key="0">0</button>
+    <button type="button" class="key action" data-key="back">⌫</button>
+    <button type="button" class="key action" data-key="clear">クリア</button>
+    <button type="button" class="key done" data-key="done">完了</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const ids=["totalKg","width","thickness"];
+  const labels={
+    totalKg:"総重量（kg）",
+    width:"製品幅（mm）",
+    thickness:"製品厚み（mm）"
+  };
+  const colors={
+    totalKg:"#2f80ed",
+    width:"#27ae60",
+    thickness:"#f2994a"
+  };
+  const pad=document.getElementById("customKeypad");
+  const back=document.getElementById("keypadBackdrop");
+  const title=document.getElementById("keypadTitle");
+  const display=document.getElementById("keypadValue");
+  let target=null;
+
+  function sync(){
+    display.textContent=(target && target.value) ? target.value : "0";
+    if(target){
+      display.style.borderColor=colors[target.id]||"#dce2eb";
+      title.style.color=colors[target.id]||"#172033";
+    }
+  }
+  function openPad(el){
+    target=el;
+    title.textContent=labels[el.id]||"数字入力";
+    pad.classList.add("open");
+    back.classList.add("open");
+    pad.setAttribute("aria-hidden","false");
+    sync();
+  }
+  function closePad(){
+    pad.classList.remove("open");
+    back.classList.remove("open");
+    pad.setAttribute("aria-hidden","true");
+    if(target){
+      target.dispatchEvent(new Event("change",{bubbles:true}));
+    }
+    target=null;
+  }
+
+  ids.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.addEventListener("click",()=>openPad(el));
+    el.addEventListener("focus",e=>{ e.target.blur(); openPad(el); });
+  });
+
+  back.addEventListener("click",closePad);
+
+  pad.addEventListener("click",e=>{
+    const b=e.target.closest("[data-key]");
+    if(!b || !target) return;
+    const k=b.dataset.key;
+    let v=target.value||"";
+
+    if(k==="done"){ closePad(); return; }
+    if(k==="clear"){ target.value=""; sync(); return; }
+    if(k==="back"){ target.value=v.slice(0,-1); sync(); return; }
+
+    if(k==="."){
+      if(v.includes(".")) return;
+      target.value = v ? v+"." : "0.";
+      sync();
+      return;
+    }
+
+    // 先頭の0を自然に処理
+    if(v==="0") v="";
+    // 最大桁数を軽く制限
+    const maxLen = target.id==="thickness" ? 6 : 7;
+    if(v.length>=maxLen) return;
+    target.value=v+k;
+    sync();
+  });
 })();
 </script>
 
