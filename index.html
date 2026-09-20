@@ -124,6 +124,11 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 }
 
 </style>
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#172033">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="風袋計算">
 </head>
 <body>
 <main>
@@ -135,10 +140,7 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <div class="grid">
 <div><label>FNo</label><input id="fno" type="text" placeholder="任意"></div>
 <div><label>コイルNo</label><input id="coilNo" type="text" placeholder="任意"></div>
-<div><label>総重量（kg）</label><input id="totalKg" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力">
-<button type="button" id="weightCamera" style="margin-top:8px;width:100%;padding:12px;border:1px solid #cbd3df;border-radius:12px;background:#fff;font-weight:800;font-size:16px">📷 重量をカメラで読取</button>
-<input id="weightPhoto" type="file" accept="image/*" capture="environment" hidden>
-<div id="weightReadStatus" class="hint" data-version="sevenseg-v4-custom-keypad-color-v1">秤の数字を撮影すると、端末の文字認識で総重量へ入力します。</div></div>
+<div><label>総重量（kg）</label><input id="totalKg" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力"></div>
 <div><label>製品幅（mm）</label><input id="width" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力"></div>
 <div><label>製品厚み（mm）</label><input id="thickness" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力"></div>
 </div>
@@ -398,327 +400,7 @@ $("calc").addEventListener("click",calc);
 updateTube();
 </script>
 
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script>
-(function(){
- const btn=document.getElementById('weightCamera');
- const file=document.getElementById('weightPhoto');
- const status=document.getElementById('weightReadStatus');
- const total=document.getElementById('totalKg');
 
- btn.addEventListener('click',()=>file.click());
-
- function loadImage(f){
-   return new Promise((resolve,reject)=>{
-     const img=new Image();
-     const url=URL.createObjectURL(f);
-     img.onload=()=>{URL.revokeObjectURL(url);resolve(img);};
-     img.onerror=(e)=>{URL.revokeObjectURL(url);reject(e);};
-     img.src=url;
-   });
- }
-
- function drawScaled(img,maxSide=1600){
-   const scale=Math.min(1,maxSide/Math.max(img.naturalWidth||img.width,img.naturalHeight||img.height));
-   const c=document.createElement('canvas');
-   c.width=Math.max(1,Math.round((img.naturalWidth||img.width)*scale));
-   c.height=Math.max(1,Math.round((img.naturalHeight||img.height)*scale));
-   const ctx=c.getContext('2d',{willReadFrequently:true});
-   ctx.drawImage(img,0,0,c.width,c.height);
-   return c;
- }
-
- function greenMask(canvas){
-   const ctx=canvas.getContext('2d',{willReadFrequently:true});
-   const im=ctx.getImageData(0,0,canvas.width,canvas.height);
-   const a=im.data, w=canvas.width, h=canvas.height;
-   const m=new Uint8Array(w*h);
-   for(let i=0,p=0;i<a.length;i+=4,p++){
-     const r=a[i], g=a[i+1], b=a[i+2];
-     // 緑色LEDの7セグ表示を抽出
-     if(g>80 && g>r*1.22 && g>b*1.10 && (g-r)>22) m[p]=1;
-   }
-   return {mask:m,w,h};
- }
-
- function groups1D(values,threshold){
-   const out=[];
-   let s=-1;
-   for(let i=0;i<values.length;i++){
-     const on=values[i]>=threshold;
-     if(on && s<0) s=i;
-     if(!on && s>=0){out.push([s,i-1]);s=-1;}
-   }
-   if(s>=0) out.push([s,values.length-1]);
-   return out;
- }
-
- function detectDisplayBand(mask,w,h){
-   const rows=new Uint32Array(h);
-   let max=0;
-   for(let y=0;y<h;y++){
-     let n=0, base=y*w;
-     for(let x=0;x<w;x++) n+=mask[base+x];
-     rows[y]=n;
-     if(n>max) max=n;
-   }
-   if(max<8) return null;
-
-   // 低めのしきい値で7セグ数字の上段～下段をひとまとまりにする
-   const threshold=Math.max(2,Math.floor(max*0.03));
-   const gs=groups1D(rows,threshold);
-   if(!gs.length) return null;
-
-   // 行方向の緑画素量が最も多い帯を主表示とみなす
-   let best=null, bestScore=-1;
-   for(const g of gs){
-     if((g[1]-g[0]+1)<20) continue;
-     let score=0;
-     for(let y=g[0];y<=g[1];y++) score+=rows[y];
-     if(score>bestScore){bestScore=score;best=g;}
-   }
-   if(!best) return null;
-
-   const H=best[1]-best[0]+1;
-   const pad=Math.max(4,Math.round(H*0.04));
-   return [Math.max(0,best[0]-pad),Math.min(h-1,best[1]+pad)];
- }
-
- function getDigitGroups(mask,w,y0,y1){
-   const cols=new Uint32Array(w);
-   let max=0;
-   for(let x=0;x<w;x++){
-     let n=0;
-     for(let y=y0;y<=y1;y++) n+=mask[y*w+x];
-     cols[x]=n;
-     if(n>max) max=n;
-   }
-   if(max<5) return [];
-
-   const threshold=Math.max(2,Math.floor(max*0.03));
-   let gs=groups1D(cols,threshold);
-   const bandH=y1-y0+1;
-
-   // 小さすぎるゴミを除去
-   gs=gs.filter(g=>(g[1]-g[0]+1)>=4);
-   if(!gs.length) return [];
-
-   const maxW=Math.max(...gs.map(g=>g[1]-g[0]+1));
-
-   // 矢印・下側表示などを除外。
-   // 「1」は細いので、幅だけでなく縦方向の高さも見て残す。
-   gs=gs.filter(g=>{
-     const ww=g[1]-g[0]+1;
-     let minY=y1, maxY=y0, found=false;
-     for(let x=g[0];x<=g[1];x++){
-       for(let y=y0;y<=y1;y++){
-         if(mask[y*w+x]){
-           found=true;
-           if(y<minY) minY=y;
-           if(y>maxY) maxY=y;
-         }
-       }
-     }
-     const span=found ? (maxY-minY+1) : 0;
-     return ww>=maxW*0.35 || span>=bandH*0.55;
-   });
-
-   // 重要: 隣接する数字は結合しない。
-   // 例「20」は2と0の間隔が数pxしかないため、結合すると「2」と誤読する。
-   return gs;
- }
-
- function density(mask,w,h,x0,x1,y0,y1){
-   x0=Math.max(0,Math.min(w-1,Math.floor(x0)));
-   x1=Math.max(x0+1,Math.min(w,Math.ceil(x1)));
-   y0=Math.max(0,Math.min(h-1,Math.floor(y0)));
-   y1=Math.max(y0+1,Math.min(h,Math.ceil(y1)));
-   let n=0, tot=(x1-x0)*(y1-y0);
-   for(let y=y0;y<y1;y++) for(let x=x0;x<x1;x++) n+=mask[y*w+x];
-   return tot? n/tot : 0;
- }
-
- function decodeDigit(mask,w,h,gx0,gx1,y0,y1,medianW){
-   const W=gx1-gx0+1, H=y1-y0+1;
-
-   // 「1」はかなり細い
-   if(medianW && W < medianW*0.52) return '1';
-
-   // 各セグメントの「線の強さ」を見る。
-   // 広い面積の平均ではなく、最も明るい横線/縦線を拾うので
-   // 反射で0を8と誤認しにくい。
-   function hStrength(yA,yB){
-     const xa=Math.max(gx0,Math.floor(gx0+W*0.18));
-     const xb=Math.min(gx1+1,Math.ceil(gx0+W*0.82));
-     const ya=Math.max(y0,Math.floor(y0+H*yA));
-     const yb=Math.min(y1+1,Math.ceil(y0+H*yB));
-     let best=0, width=Math.max(1,xb-xa);
-     for(let y=ya;y<yb;y++){
-       let n=0;
-       for(let x=xa;x<xb;x++) n+=mask[y*w+x];
-       best=Math.max(best,n/width);
-     }
-     return best;
-   }
-
-   function vStrength(xA,xB,yA,yB){
-     const xa=Math.max(gx0,Math.floor(gx0+W*xA));
-     const xb=Math.min(gx1+1,Math.ceil(gx0+W*xB));
-     const ya=Math.max(y0,Math.floor(y0+H*yA));
-     const yb=Math.min(y1+1,Math.ceil(y0+H*yB));
-     let best=0, height=Math.max(1,yb-ya);
-     for(let x=xa;x<xb;x++){
-       let n=0;
-       for(let y=ya;y<yb;y++) n+=mask[y*w+x];
-       best=Math.max(best,n/height);
-     }
-     return best;
-   }
-
-   const strength={
-     a:hStrength(0.00,0.28),
-     g:hStrength(0.32,0.68),
-     d:hStrength(0.72,1.00),
-     f:vStrength(0.00,0.42,0.00,0.38),
-     b:vStrength(0.62,1.00,0.00,0.38),
-     e:vStrength(0.00,0.42,0.62,1.00),
-     c:vStrength(0.62,1.00,0.62,1.00)
-   };
-
-   const seg={};
-   for(const k of 'abcdefg') seg[k]=strength[k] > 0.52;
-
-   const patterns={
-     '0':'abcdef','1':'bc','2':'abdeg','3':'abcdg','4':'bcfg',
-     '5':'acdfg','6':'acdefg','7':'abc','8':'abcdefg','9':'abcdfg'
-   };
-
-   let best=null,bestDist=99;
-   for(const [digit,p] of Object.entries(patterns)){
-     let dist=0;
-     for(const k of 'abcdefg'){
-       const want=p.includes(k);
-       if(seg[k]!==want) dist++;
-     }
-     if(dist<bestDist){bestDist=dist;best=digit;}
-   }
-
-   // 完全一致か、1箇所だけ曖昧な時のみ採用。
-   return bestDist<=1 ? best : null;
- }
-
- function detectSevenSegment(canvas){
-   const {mask,w,h}=greenMask(canvas);
-   const band=detectDisplayBand(mask,w,h);
-   if(!band) return null;
-   const [y0,y1]=band;
-   let groups=getDigitGroups(mask,w,y0,y1);
-   if(!groups.length) return null;
-
-   // 最大4桁程度を想定し、幅・位置から主表示の候補を選択
-   const widths=groups.map(g=>g[1]-g[0]+1).sort((a,b)=>a-b);
-   const medianW=widths[Math.floor(widths.length/2)] || 0;
-
-   // 極端に小さいグループは矢印等のノイズ
-   groups=groups.filter(g=>{
-     const ww=g[1]-g[0]+1;
-     return ww>=Math.max(7,medianW*0.30);
-   });
-
-   // 左から右に最大4桁
-   groups=groups.slice(0,4);
-   if(!groups.length) return null;
-
-   let s='';
-   for(const g of groups){
-     const d=decodeDigit(mask,w,h,g[0],g[1],y0,y1,medianW);
-     if(d===null) return null;
-     s+=d;
-   }
-   if(!/^\d{1,4}$/.test(s)) return null;
-   const n=Number(s);
-   return (n>0 && n<10000)?n:null;
- }
-
- function makeOcrCrop(canvas){
-   const {mask,w,h}=greenMask(canvas);
-   const band=detectDisplayBand(mask,w,h);
-   if(!band) return canvas;
-   const [y0,y1]=band;
-   const groups=getDigitGroups(mask,w,y0,y1);
-   if(!groups.length) return canvas;
-
-   const x0=Math.max(0,groups[0][0]-Math.round(w*.03));
-   const x1=Math.min(w-1,groups[groups.length-1][1]+Math.round(w*.03));
-   const yy0=Math.max(0,y0-Math.round((y1-y0+1)*.08));
-   const yy1=Math.min(h-1,y1+Math.round((y1-y0+1)*.08));
-
-   const out=document.createElement('canvas');
-   out.width=Math.max(1,(x1-x0+1)*3);
-   out.height=Math.max(1,(yy1-yy0+1)*3);
-   const o=out.getContext('2d',{willReadFrequently:true});
-   o.imageSmoothingEnabled=true;
-   o.drawImage(canvas,x0,yy0,x1-x0+1,yy1-yy0+1,0,0,out.width,out.height);
-
-   // 緑LEDを白、その他を黒へ2値化
-   const im=o.getImageData(0,0,out.width,out.height), a=im.data;
-   for(let i=0;i<a.length;i+=4){
-     const r=a[i],g=a[i+1],b=a[i+2];
-     const on=(g>75 && g>r*1.18 && g>b*1.08 && (g-r)>18);
-     const v=on?255:0;
-     a[i]=a[i+1]=a[i+2]=v;
-   }
-   o.putImageData(im,0,0);
-   return out;
- }
-
- async function ocrFallback(canvas){
-   if(typeof Tesseract==='undefined') return null;
-   status.textContent='予備の文字認識で確認中…';
-   const crop=makeOcrCrop(canvas);
-   const r=await Tesseract.recognize(crop,'eng',{
-     logger:m=>{
-       if(m.status==='recognizing text')
-         status.textContent='予備の文字認識で確認中… '+Math.round((m.progress||0)*100)+'%';
-     }
-   });
-   const txt=(r.data.text||'').replace(/[^\d]/g,'');
-   if(!txt) return null;
-   const n=Number(txt.slice(0,4));
-   return (n>0 && n<10000)?n:null;
- }
-
- file.addEventListener('change',async()=>{
-   if(!file.files||!file.files[0]) return;
-   try{
-     btn.disabled=true;
-     status.textContent='秤の緑色表示を解析中…';
-     const img=await loadImage(file.files[0]);
-     const canvas=drawScaled(img);
-
-     let n=detectSevenSegment(canvas);
-
-     if(n===null){
-       n=await ocrFallback(canvas);
-     }
-
-     if(n!==null){
-       total.value=n;
-       status.textContent='✓ '+n+' kg を総重量に自動入力しました。違う場合は総重量欄をタップして修正できます。';
-       total.dispatchEvent(new Event('change'));
-     }else{
-       status.textContent='数字を正しく読取れませんでした。表示数字を画面中央に大きく写してもう一度撮影するか、総重量を手入力してください。';
-     }
-   }catch(e){
-     console.error(e);
-     status.textContent='読取りに失敗しました。もう一度撮影するか、総重量を手入力してください。';
-   }finally{
-     btn.disabled=false;
-     file.value='';
-   }
- });
-})();
-</script>
 
 
 <div id="keypadBackdrop" class="keypad-backdrop"></div>
@@ -826,5 +508,12 @@ updateTube();
 })();
 </script>
 
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("./sw.js").catch(function(){});
+  });
+}
+</script>
 </body>
 </html>
