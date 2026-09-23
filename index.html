@@ -6,10 +6,18 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#172033">
 <title>風袋計算</title>
-<!-- offline-v4: 厚み→幅→総重量→紙管/鉄リング→内径→間紙→テープ→計算 -->
+<!-- offline-v5: 間紙→テープ→計算の移動修正 / ダブルタップ拡大防止 -->
 <style>
 :root{--bg:#eef1f6;--card:#fff;--ink:#172033;--muted:#647084;--line:#dce2eb;--accent:#172033}
 *{box-sizing:border-box}
+html,body,button,input,select,.key{
+  touch-action:manipulation;
+}
+button,.key{
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
 body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;color:var(--ink)}
 main{max-width:760px;margin:auto;padding:18px 14px 48px}
 .title{font-size:30px;font-weight:900;margin:8px 0 4px}.sub{color:var(--muted);font-weight:700;margin-bottom:18px}
@@ -173,6 +181,7 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <h2>③ 間紙</h2>
 <label>紙の有無</label>
 <select id="paperUse">
+<option value="" selected disabled>選択してください</option>
 <option value="none">紙なし</option>
 <option value="use">紙入り</option>
 </select>
@@ -183,6 +192,7 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <h2>④ テープ</h2>
 <label>テープ種類</label>
 <select id="tapeType">
+<option value="" selected disabled>選択してください</option>
 <option value="none">なし</option>
 <option value="SPV">SPV</option>
 <option value="SPH">SPH</option>
@@ -362,6 +372,14 @@ function calc(){
    msg.textContent="総重量・製品幅・製品厚みを入力してください。";
    msg.className="err"; return;
  }
+ if($("paperUse").value===""){
+   msg.textContent="間紙を選択してください。";
+   msg.className="err"; return;
+ }
+ if($("tapeType").value===""){
+   msg.textContent="テープを選択してください。";
+   msg.className="err"; return;
+ }
 
  const type=$("tubeType").value, dia=Number($("diameter").value);
  const coef=(tubeCoeff[type]||{})[dia];
@@ -379,7 +397,7 @@ function calc(){
  }
 
  const tapeType=$("tapeType").value;
- if(tapeType!=="none"){
+ if(["SPV","SPH","SPE"].includes(tapeType)){
    const table={SPV,SPH,SPE}[tapeType];
    const r=calcByTable(table,thick,total);
    tapeW=r.value;
@@ -492,7 +510,15 @@ updateTube();
   function moveTo(el){
     if(!el) return;
     el.scrollIntoView({behavior:"smooth",block:"center"});
-    setTimeout(()=>el.focus({preventScroll:true}),220);
+    el.style.outline="4px solid #2f80ed";
+    el.style.outlineOffset="3px";
+    setTimeout(()=>{
+      try{ el.focus({preventScroll:true}); }catch(_){}
+      setTimeout(()=>{
+        el.style.outline="";
+        el.style.outlineOffset="";
+      },900);
+    },220);
   }
 
   if(tubeTypeEl){
