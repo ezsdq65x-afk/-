@@ -1,9 +1,4 @@
 {
-  "name": "風袋計算",
-  "short_name": "風袋計算",
-  "start_url": "./",
-  "scope": "./",
-  "display": "standalone",
-  "background_color": "#eef1f6",
-  "theme_color": "#172033"
+"name":"風袋計算","short_name":"風袋計算","start_url":"./","scope":"./",
+"display":"standalone","background_color":"#ffffff","theme_color":"#0b5ed7"
 }

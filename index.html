@@ -26,109 +26,9 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 .total small{display:block;font-weight:800}.total b{font-size:46px}
 .err{color:#b42318;font-weight:800;margin-top:12px;white-space:pre-line}
 .ok{color:#1a6d40;font-weight:800;margin-top:12px;white-space:pre-line}
-
-/* ===== 大きめ10キー入力 UI ===== */
-.num-field{
-  cursor:pointer;
-  font-size:22px;
-  min-height:58px;
-  caret-color:transparent;
-}
-#totalKg{
-  border-color:#2f80ed;
-  background:#eef6ff;
-}
-#width{
-  border-color:#27ae60;
-  background:#effaf3;
-}
-#thickness{
-  border-color:#f2994a;
-  background:#fff6ec;
-}
-#calc{
-  background:#7b2cbf;
-  box-shadow:0 8px 18px rgba(123,44,191,.22);
-}
-#calc:active{transform:translateY(1px)}
-
-.keypad-backdrop{
-  position:fixed;
-  inset:0;
-  background:rgba(15,23,42,.38);
-  z-index:9998;
-  display:none;
-}
-.keypad{
-  position:fixed;
-  left:0;
-  right:0;
-  bottom:0;
-  z-index:9999;
-  background:#eef1f6;
-  border-radius:26px 26px 0 0;
-  box-shadow:0 -12px 30px rgba(20,35,60,.18);
-  padding:14px 14px max(18px,env(safe-area-inset-bottom));
-  display:none;
-}
-.keypad.open,.keypad-backdrop.open{display:block}
-.keypad-head{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  margin:0 auto 12px;
-  max-width:520px;
-}
-.keypad-title{
-  font-size:18px;
-  font-weight:900;
-}
-.keypad-value{
-  font-size:28px;
-  font-weight:900;
-  background:#fff;
-  border-radius:14px;
-  padding:8px 14px;
-  min-width:130px;
-  text-align:right;
-  border:2px solid #dce2eb;
-}
-.keypad-grid{
-  max-width:520px;
-  margin:auto;
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:10px;
-}
-.key{
-  min-height:68px;
-  margin:0;
-  padding:8px;
-  border-radius:16px;
-  background:#fff;
-  color:#172033;
-  font-size:30px;
-  font-weight:900;
-  border:1px solid #d7dde7;
-  box-shadow:0 2px 5px rgba(20,35,60,.08);
-}
-.key:active{background:#dde5f1}
-.key.action{font-size:22px;background:#dfe5ed}
-.key.done{
-  grid-column:1 / -1;
-  min-height:58px;
-  background:#172033;
-  color:#fff;
-  font-size:22px;
-}
-
 </style>
 <link rel="manifest" href="./manifest.webmanifest">
-<meta name="theme-color" content="#172033">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="風袋計算">
+<meta name="theme-color" content="#0b5ed7">
 </head>
 <body>
 <main>
@@ -140,9 +40,9 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <div class="grid">
 <div><label>FNo</label><input id="fno" type="text" placeholder="任意"></div>
 <div><label>コイルNo</label><input id="coilNo" type="text" placeholder="任意"></div>
-<div><label>総重量（kg）</label><input id="totalKg" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力"></div>
-<div><label>製品幅（mm）</label><input id="width" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力"></div>
-<div><label>製品厚み（mm）</label><input id="thickness" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力"></div>
+<div><label>総重量（kg）</label><input id="totalKg" type="number" step="0.1" inputmode="decimal" placeholder="例：1530"></div>
+<div><label>製品幅（mm）</label><input id="width" type="number" step="1" inputmode="decimal" placeholder="例：400"></div>
+<div><label>製品厚み（mm）</label><input id="thickness" type="number" step="0.01" inputmode="decimal" placeholder="例：0.50"></div>
 </div>
 <div class="hint">間紙とテープは、この「製品厚み」と「総重量」を使って換算表から計算します。間紙用・テープ用の別の厚み入力はありません。</div>
 </section>
@@ -399,120 +299,9 @@ $("calc").addEventListener("click",calc);
 });
 updateTube();
 </script>
-
-
-
-
-<div id="keypadBackdrop" class="keypad-backdrop"></div>
-<div id="customKeypad" class="keypad" aria-hidden="true">
-  <div class="keypad-head">
-    <div id="keypadTitle" class="keypad-title">数字入力</div>
-    <div id="keypadValue" class="keypad-value">0</div>
-  </div>
-  <div class="keypad-grid">
-    <button type="button" class="key" data-key="1">1</button>
-    <button type="button" class="key" data-key="2">2</button>
-    <button type="button" class="key" data-key="3">3</button>
-    <button type="button" class="key" data-key="4">4</button>
-    <button type="button" class="key" data-key="5">5</button>
-    <button type="button" class="key" data-key="6">6</button>
-    <button type="button" class="key" data-key="7">7</button>
-    <button type="button" class="key" data-key="8">8</button>
-    <button type="button" class="key" data-key="9">9</button>
-    <button type="button" class="key" data-key=".">.</button>
-    <button type="button" class="key" data-key="0">0</button>
-    <button type="button" class="key action" data-key="back">⌫</button>
-    <button type="button" class="key action" data-key="clear">クリア</button>
-    <button type="button" class="key done" data-key="done">完了</button>
-  </div>
-</div>
-
-<script>
-(function(){
-  const ids=["totalKg","width","thickness"];
-  const labels={
-    totalKg:"総重量（kg）",
-    width:"製品幅（mm）",
-    thickness:"製品厚み（mm）"
-  };
-  const colors={
-    totalKg:"#2f80ed",
-    width:"#27ae60",
-    thickness:"#f2994a"
-  };
-  const pad=document.getElementById("customKeypad");
-  const back=document.getElementById("keypadBackdrop");
-  const title=document.getElementById("keypadTitle");
-  const display=document.getElementById("keypadValue");
-  let target=null;
-
-  function sync(){
-    display.textContent=(target && target.value) ? target.value : "0";
-    if(target){
-      display.style.borderColor=colors[target.id]||"#dce2eb";
-      title.style.color=colors[target.id]||"#172033";
-    }
-  }
-  function openPad(el){
-    target=el;
-    title.textContent=labels[el.id]||"数字入力";
-    pad.classList.add("open");
-    back.classList.add("open");
-    pad.setAttribute("aria-hidden","false");
-    sync();
-  }
-  function closePad(){
-    pad.classList.remove("open");
-    back.classList.remove("open");
-    pad.setAttribute("aria-hidden","true");
-    if(target){
-      target.dispatchEvent(new Event("change",{bubbles:true}));
-    }
-    target=null;
-  }
-
-  ids.forEach(id=>{
-    const el=document.getElementById(id);
-    if(!el) return;
-    el.addEventListener("click",()=>openPad(el));
-    el.addEventListener("focus",e=>{ e.target.blur(); openPad(el); });
-  });
-
-  back.addEventListener("click",closePad);
-
-  pad.addEventListener("click",e=>{
-    const b=e.target.closest("[data-key]");
-    if(!b || !target) return;
-    const k=b.dataset.key;
-    let v=target.value||"";
-
-    if(k==="done"){ closePad(); return; }
-    if(k==="clear"){ target.value=""; sync(); return; }
-    if(k==="back"){ target.value=v.slice(0,-1); sync(); return; }
-
-    if(k==="."){
-      if(v.includes(".")) return;
-      target.value = v ? v+"." : "0.";
-      sync();
-      return;
-    }
-
-    // 先頭の0を自然に処理
-    if(v==="0") v="";
-    // 最大桁数を軽く制限
-    const maxLen = target.id==="thickness" ? 6 : 7;
-    if(v.length>=maxLen) return;
-    target.value=v+k;
-    sync();
-  });
-})();
-</script>
-
 <script>
 if ("serviceWorker" in navigator) {
-  window.addEventListener("load", function () {
-    navigator.serviceWorker.register("./sw.js").catch(function(){});
-  });
+  window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js"));
 }
 </script>
 </body>
