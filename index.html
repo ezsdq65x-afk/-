@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#172033">
 <title>風袋計算</title>
-<!-- offline-v2: 厚み→幅→総重量 / 自動次入力 -->
+<!-- offline-v4: 厚み→幅→総重量→紙管/鉄リング→内径→間紙→テープ→計算 -->
 <style>
 :root{--bg:#eef1f6;--card:#fff;--ink:#172033;--muted:#647084;--line:#dce2eb;--accent:#172033}
 *{box-sizing:border-box}
@@ -145,7 +145,7 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <div><label>製品幅（mm）</label><input id="width" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力"></div>
 <div><label>総重量（kg）</label><input id="totalKg" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力"></div>
 </div>
-<div class="hint">入力順：製品厚み → 製品幅 → 総重量。「完了」を押すと次の入力欄へ進みます。間紙とテープは製品厚み＋総重量から自動計算します。</div>
+<div class="hint">入力順：製品厚み → 製品幅 → 総重量 → 紙管・鉄リング → 間紙 → テープ → 計算。「完了」や選択後に次へ進みます。</div>
 </section>
 
 <section class="card">
@@ -481,6 +481,33 @@ updateTube();
 
   back.addEventListener("click",closePad);
 
+  // 入力・選択の流れ：
+  // 厚み → 幅 → 総重量 → 紙管/鉄リング種類 → 内径 → 間紙 → テープ → 計算
+  const tubeTypeEl=document.getElementById("tubeType");
+  const diameterEl=document.getElementById("diameter");
+  const paperUseEl=document.getElementById("paperUse");
+  const tapeTypeEl=document.getElementById("tapeType");
+  const calcBtnEl=document.getElementById("calc");
+
+  function moveTo(el){
+    if(!el) return;
+    el.scrollIntoView({behavior:"smooth",block:"center"});
+    setTimeout(()=>el.focus({preventScroll:true}),220);
+  }
+
+  if(tubeTypeEl){
+    tubeTypeEl.addEventListener("change",()=>moveTo(diameterEl));
+  }
+  if(diameterEl){
+    diameterEl.addEventListener("change",()=>moveTo(paperUseEl));
+  }
+  if(paperUseEl){
+    paperUseEl.addEventListener("change",()=>moveTo(tapeTypeEl));
+  }
+  if(tapeTypeEl){
+    tapeTypeEl.addEventListener("change",()=>moveTo(calcBtnEl));
+  }
+
   pad.addEventListener("click",e=>{
     const b=e.target.closest("[data-key]");
     if(!b || !target) return;
@@ -496,10 +523,10 @@ updateTube();
       }else if(currentId==="width"){
         setTimeout(()=>openPad(document.getElementById("totalKg")),120);
       }else if(currentId==="totalKg"){
-        const calcBtn=document.getElementById("calc");
-        if(calcBtn){
-          calcBtn.scrollIntoView({behavior:"smooth",block:"center"});
-          setTimeout(()=>calcBtn.focus({preventScroll:true}),250);
+        const tubeType=document.getElementById("tubeType");
+        if(tubeType){
+          tubeType.scrollIntoView({behavior:"smooth",block:"center"});
+          setTimeout(()=>tubeType.focus({preventScroll:true}),250);
         }
       }
       return;

@@ -1,4 +1,4 @@
-const CACHE_NAME = "fuutai-offline-order-v2";
+const CACHE_NAME = "fuutai-offline-order-v4-flow";
 const APP_FILES = ["./", "./index.html", "./manifest.webmanifest"];
 
 self.addEventListener("install", event => {
@@ -19,6 +19,24 @@ self.addEventListener("activate", event => {
 
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
+
+  // HTML navigation: network-first when online, cached page when offline
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request, { cache: "no-store" })
+        .then(response => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put("./index.html", copy));
+          return response;
+        })
+        .catch(() =>
+          caches.match("./index.html").then(r => r || caches.match("./"))
+        )
+    );
+    return;
+  }
+
+  // Other local files: cache-first, then network
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
@@ -26,7 +44,7 @@ self.addEventListener("fetch", event => {
         const copy = response.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
         return response;
-      }).catch(() => caches.match("./index.html"));
+      });
     })
   );
 });
