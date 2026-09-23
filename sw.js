@@ -1,4 +1,4 @@
-const CACHE_NAME = "fuutai-offline-order-v5-flowfix";
+const CACHE_NAME = "fuutai-offline-order-v6-ipadfix";
 const APP_FILES = ["./", "./index.html", "./manifest.webmanifest"];
 
 self.addEventListener("install", event => {

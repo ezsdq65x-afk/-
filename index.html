@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#172033">
 <title>風袋計算</title>
-<!-- offline-v5: 間紙→テープ→計算の移動修正 / ダブルタップ拡大防止 -->
+<!-- offline-v6: iPad総重量→紙管/鉄リング選択の直接起動修正 -->
 <style>
 :root{--bg:#eef1f6;--card:#fff;--ink:#172033;--muted:#647084;--line:#dce2eb;--accent:#172033}
 *{box-sizing:border-box}
@@ -551,8 +551,24 @@ updateTube();
       }else if(currentId==="totalKg"){
         const tubeType=document.getElementById("tubeType");
         if(tubeType){
+          // iPad/Safari対策：ユーザー操作中に紙管・鉄リング選択を直接開く
           tubeType.scrollIntoView({behavior:"smooth",block:"center"});
-          setTimeout(()=>tubeType.focus({preventScroll:true}),250);
+          try{
+            if(typeof tubeType.showPicker==="function"){
+              tubeType.showPicker();
+            }else{
+              tubeType.focus({preventScroll:true});
+              tubeType.click();
+            }
+          }catch(_){
+            try{ tubeType.focus({preventScroll:true}); }catch(__){}
+          }
+          tubeType.style.outline="4px solid #2f80ed";
+          tubeType.style.outlineOffset="3px";
+          setTimeout(()=>{
+            tubeType.style.outline="";
+            tubeType.style.outlineOffset="";
+          },1000);
         }
       }
       return;
