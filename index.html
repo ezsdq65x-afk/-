@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#172033">
 <title>風袋計算</title>
-<!-- offline-v8: 幅・総重量を2組入力 / 2結果表示 / 分岐移動対応 -->
+<!-- offline-v9: ①計算完了後に②の幅入力へ自動移動 -->
 <style>
 :root{--bg:#eef1f6;--card:#fff;--ink:#172033;--muted:#647084;--line:#dce2eb;--accent:#172033}
 *{box-sizing:border-box}
@@ -203,7 +203,7 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
   </div>
 </div>
 
-<div class="hint">入力順：厚み → 幅① → 総重量① → 幅② → 総重量② → 紙管・鉄リング → 間紙。②が不要な時は空欄でもOKです。</div>
+<div class="hint">入力順：厚み → 幅① → 総重量① → 紙管・鉄リング → 間紙 → 計算①。①の計算後、自動で幅②から始まります。</div>
 </section>
 
 <section class="card">
@@ -271,7 +271,7 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
   </div>
 </div>
 <div id="message"></div>
-<button id="calc" type="button">2つまとめて計算</button>
+<button id="calc" type="button">①を計算</button>
 </section>
 </main>
 
@@ -469,51 +469,70 @@ function clearResult(index){
  $(`deductResult${index}`).textContent="0.00 kg";
 }
 
-function calc(){
- const thick=Number($("thickness").value);
- const w1=Number($("width1").value);
- const t1=Number($("totalKg1").value);
- const w2=Number($("width2").value);
- const t2=Number($("totalKg2").value);
- const msg=$("message"); msg.className="";
+let calcStage=1;
 
- if(!(thick>0) || !(w1>0) || !(t1>0)){
-   msg.textContent="厚み・幅①・総重量①を入力してください。";
-   msg.className="err"; return;
+function validateCommon(){
+ const thick=Number($("thickness").value);
+ const msg=$("message"); msg.className="";
+ if(!(thick>0)){
+   msg.textContent="厚みを入力してください。";
+   msg.className="err"; return false;
  }
  if($("paperUse").value===""){
    msg.textContent="間紙を選択してください。";
-   msg.className="err"; return;
+   msg.className="err"; return false;
  }
-
  syncPaperTape();
-
  if($("paperUse").value!=="use" && $("tapeType").value===""){
    msg.textContent="テープを選択してください。";
-   msg.className="err"; return;
+   msg.className="err"; return false;
  }
-
  const type=$("tubeType").value, dia=Number($("diameter").value);
  const coef=(tubeCoeff[type]||{})[dia];
  if(type!=="none" && coef===undefined){
    msg.textContent="選択した紙管・鉄リングと内径の係数がありません。";
+   msg.className="err"; return false;
+ }
+ return true;
+}
+
+function openSecondWidth(){
+ const w2=$("width2");
+ w2.scrollIntoView({behavior:"smooth",block:"center"});
+ setTimeout(()=>{
+   w2.click();
+ },450);
+}
+
+function calc(){
+ const msg=$("message"); msg.className="";
+ if(!validateCommon()) return;
+
+ if(calcStage===1){
+   const w1=Number($("width1").value);
+   const t1=Number($("totalKg1").value);
+   if(!(w1>0) || !(t1>0)){
+     msg.textContent="幅①・総重量①を入力してください。";
+     msg.className="err"; return;
+   }
+   calcOne(w1,t1,1);
+   clearResult(2);
+   calcStage=2;
+   $("calc").textContent="②を計算";
+   msg.textContent="①を計算しました。次は幅②を入力してください。";
+   msg.className="ok";
+   openSecondWidth();
+   return;
+ }
+
+ const w2=Number($("width2").value);
+ const t2=Number($("totalKg2").value);
+ if(!(w2>0) || !(t2>0)){
+   msg.textContent="幅②・総重量②を入力してください。";
    msg.className="err"; return;
  }
-
- calcOne(w1,t1,1);
-
- if((w2>0) || (t2>0)){
-   if(!(w2>0) || !(t2>0)){
-     msg.textContent="②を使う場合は、幅②と総重量②の両方を入力してください。";
-     msg.className="err";
-     return;
-   }
-   calcOne(w2,t2,2);
-   msg.textContent="①と②を計算しました。";
- }else{
-   clearResult(2);
-   msg.textContent="①を計算しました。②は未入力です。";
- }
+ calcOne(w2,t2,2);
+ msg.textContent="②を計算しました。";
  msg.className="ok";
 }
 $("calc").addEventListener("click",calc);
@@ -614,7 +633,8 @@ updateTube();
   back.addEventListener("click",closePad);
 
   // 入力・選択の流れ：
-  // 厚み → 幅① → 総重量① → 幅② → 総重量② → 紙管/鉄リング → 間紙 → 分岐
+  // ①：厚み → 幅① → 総重量① → 条件 → 計算①
+  // ②：計算①完了後 → 幅② → 総重量② → 計算②
   const tubeTypeEl=document.getElementById("tubeType");
   const diameterEl=document.getElementById("diameter");
   const paperUseEl=document.getElementById("paperUse");
@@ -667,30 +687,26 @@ updateTube();
       }else if(currentId==="width1"){
         setTimeout(()=>openPad(document.getElementById("totalKg1")),120);
       }else if(currentId==="totalKg1"){
-        setTimeout(()=>openPad(document.getElementById("width2")),120);
+        const tubeType=document.getElementById("tubeType");
+        if(tubeType){
+          tubeType.scrollIntoView({behavior:"smooth",block:"center"});
+          try{
+            if(typeof tubeType.showPicker==="function") tubeType.showPicker();
+            else { tubeType.focus({preventScroll:true}); tubeType.click(); }
+          }catch(_){ try{ tubeType.focus({preventScroll:true}); }catch(__){} }
+          tubeType.style.outline="4px solid #2f80ed";
+          tubeType.style.outlineOffset="3px";
+          setTimeout(()=>{ tubeType.style.outline=""; tubeType.style.outlineOffset=""; },1000);
+        }
       }else if(currentId==="width2"){
         setTimeout(()=>openPad(document.getElementById("totalKg2")),120);
       }else if(currentId==="totalKg2"){
-        const tubeType=document.getElementById("tubeType");
-        if(tubeType){
-          // iPad/Safari対策：ユーザー操作中に紙管・鉄リング選択を直接開く
-          tubeType.scrollIntoView({behavior:"smooth",block:"center"});
-          try{
-            if(typeof tubeType.showPicker==="function"){
-              tubeType.showPicker();
-            }else{
-              tubeType.focus({preventScroll:true});
-              tubeType.click();
-            }
-          }catch(_){
-            try{ tubeType.focus({preventScroll:true}); }catch(__){}
-          }
-          tubeType.style.outline="4px solid #2f80ed";
-          tubeType.style.outlineOffset="3px";
-          setTimeout(()=>{
-            tubeType.style.outline="";
-            tubeType.style.outlineOffset="";
-          },1000);
+        const calcBtn=document.getElementById("calc");
+        if(calcBtn){
+          calcBtn.scrollIntoView({behavior:"smooth",block:"center"});
+          calcBtn.style.outline="4px solid #2f80ed";
+          calcBtn.style.outlineOffset="3px";
+          setTimeout(()=>{ calcBtn.style.outline=""; calcBtn.style.outlineOffset=""; },1000);
         }
       }
       return;
