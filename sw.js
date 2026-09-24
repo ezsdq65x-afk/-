@@ -1,26 +1,12 @@
-const CACHE_NAME = "fuutai-offline-branch-v7";
-const APP_FILES = ["./", "./index.html", "./manifest.webmanifest"];
-self.addEventListener("install", event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_FILES)));
-  self.skipWaiting();
-});
-self.addEventListener("activate", event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))));
-  self.clients.claim();
-});
-self.addEventListener("fetch", event => {
-  if (event.request.method !== "GET") return;
-  if (event.request.mode === "navigate") {
-    event.respondWith(
-      fetch(event.request, {cache:"no-store"})
-        .then(response => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put("./index.html", copy));
-          return response;
-        })
-        .catch(() => caches.match("./index.html"))
-    );
-    return;
-  }
-  event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request)));
+const CACHE_NAME="fuutai-dual-width-v8";
+const APP_FILES=["./","./index.html","./manifest.webmanifest"];
+self.addEventListener("install",e=>{e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(APP_FILES)));self.skipWaiting();});
+self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE_NAME).map(k=>caches.delete(k)))));self.clients.claim();});
+self.addEventListener("fetch",e=>{
+ if(e.request.method!=="GET")return;
+ if(e.request.mode==="navigate"){
+   e.respondWith(fetch(e.request,{cache:"no-store"}).then(r=>{const x=r.clone();caches.open(CACHE_NAME).then(c=>c.put("./index.html",x));return r;}).catch(()=>caches.match("./index.html")));
+   return;
+ }
+ e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));
 });

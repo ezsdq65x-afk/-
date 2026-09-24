@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#172033">
 <title>風袋計算</title>
-<!-- offline-v7: 間紙ありならテープを飛ばして計算 / 間紙なしならテープへ -->
+<!-- offline-v8: 幅・総重量を2組入力 / 2結果表示 / 分岐移動対応 -->
 <style>
 :root{--bg:#eef1f6;--card:#fff;--ink:#172033;--muted:#647084;--line:#dce2eb;--accent:#172033}
 *{box-sizing:border-box}
@@ -43,11 +43,11 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
   min-height:58px;
   caret-color:transparent;
 }
-#totalKg{
+#totalKg1,#totalKg2{
   border-color:#2f80ed;
   background:#eef6ff;
 }
-#width{
+#width1,#width2{
   border-color:#27ae60;
   background:#effaf3;
 }
@@ -132,6 +132,35 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
   font-size:22px;
 }
 
+
+.dual-inputs,.dual-results{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  margin-top:12px;
+}
+.dual-box{
+  border:2px solid #e3e8f0;
+  border-radius:18px;
+  padding:14px;
+  background:#fafcff;
+}
+.dual-box.left{background:#f2f8ff;border-color:#b9d8ff}
+.dual-box.right{background:#faf4ff;border-color:#dcc7ff}
+.dual-title{font-size:18px;font-weight:900;margin-bottom:10px}
+.dual-box.left .dual-title{color:#2463eb}
+.dual-box.right .dual-title{color:#7b2cbf}
+.result-mini{border-radius:18px;padding:14px;background:#fff}
+.result-mini .row{font-size:16px;padding:10px 0}
+.result-mini .row b{font-size:20px}
+.result-mini .total{margin-top:10px;padding:12px}
+.result-mini .total b{font-size:30px}
+@media(max-width:560px){
+  .dual-inputs,.dual-results{grid-template-columns:1fr 1fr;gap:8px}
+  .dual-box{padding:10px}
+  .dual-title{font-size:16px}
+}
+
 </style>
 <link rel="manifest" href="./manifest.webmanifest">
 <meta name="theme-color" content="#172033">
@@ -149,11 +178,32 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <div class="grid">
 <div><label>FNo</label><input id="fno" type="text" placeholder="任意"></div>
 <div><label>コイルNo</label><input id="coilNo" type="text" placeholder="任意"></div>
-<div><label>製品厚み（mm）</label><input id="thickness" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力"></div>
-<div><label>製品幅（mm）</label><input id="width" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力"></div>
-<div><label>総重量（kg）</label><input id="totalKg" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力"></div>
 </div>
-<div class="hint">入力順：製品厚み → 製品幅 → 総重量 → 紙管・鉄リング → 間紙。間紙ありならそのまま計算、間紙なしならテープへ進みます。</div>
+
+<div style="margin-top:12px">
+<label>製品厚み（mm）※共通</label>
+<input id="thickness" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力">
+</div>
+
+<div class="dual-inputs">
+  <div class="dual-box left">
+    <div class="dual-title">① 左側</div>
+    <label>製品幅①（mm）</label>
+    <input id="width1" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力">
+    <label style="margin-top:10px">総重量①（kg）</label>
+    <input id="totalKg1" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力">
+  </div>
+
+  <div class="dual-box right">
+    <div class="dual-title">② 右側</div>
+    <label>製品幅②（mm）</label>
+    <input id="width2" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力">
+    <label style="margin-top:10px">総重量②（kg）</label>
+    <input id="totalKg2" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力">
+  </div>
+</div>
+
+<div class="hint">入力順：厚み → 幅① → 総重量① → 幅② → 総重量② → 紙管・鉄リング → 間紙。②が不要な時は空欄でもOKです。</div>
 </section>
 
 <section class="card">
@@ -203,12 +253,25 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 
 <section class="card results">
 <h2>計算結果</h2>
-<div class="row"><span>紙管・鉄リング</span><b id="tubeResult">0.00 kg</b></div>
-<div class="row"><span>間紙</span><b id="paperResult">0.00 kg</b></div>
-<div class="row"><span>テープ</span><b id="tapeResult">0.00 kg</b></div>
-<div class="total"><small>合計控除重量</small><b id="deductResult">0.00 kg</b></div>
+<div class="dual-results">
+  <div class="result-mini dual-box left">
+    <div class="dual-title">① 左側の結果</div>
+    <div class="row"><span>紙管・鉄リング</span><b id="tubeResult1">0.00 kg</b></div>
+    <div class="row"><span>間紙</span><b id="paperResult1">0.00 kg</b></div>
+    <div class="row"><span>テープ</span><b id="tapeResult1">0.00 kg</b></div>
+    <div class="total"><small>合計控除重量①</small><b id="deductResult1">0.00 kg</b></div>
+  </div>
+
+  <div class="result-mini dual-box right">
+    <div class="dual-title">② 右側の結果</div>
+    <div class="row"><span>紙管・鉄リング</span><b id="tubeResult2">0.00 kg</b></div>
+    <div class="row"><span>間紙</span><b id="paperResult2">0.00 kg</b></div>
+    <div class="row"><span>テープ</span><b id="tapeResult2">0.00 kg</b></div>
+    <div class="total"><small>合計控除重量②</small><b id="deductResult2">0.00 kg</b></div>
+  </div>
+</div>
 <div id="message"></div>
-<button id="calc" type="button">計算する</button>
+<button id="calc" type="button">2つまとめて計算</button>
 </section>
 </main>
 
@@ -375,21 +438,56 @@ function syncPaperTape(){
  }
 }
 
-function calc(){
- const total=Number($("totalKg").value);
- const width=Number($("width").value);
+function calcOne(width,total,index){
  const thick=Number($("thickness").value);
+ const type=$("tubeType").value, dia=Number($("diameter").value);
+ const coef=(tubeCoeff[type]||{})[dia];
+
+ const tube=type==="none"?0:coef*width;
+
+ let paperW=0, tapeW=0;
+ if($("paperUse").value==="use"){
+   paperW=calcByTable(PAPER,thick,total).value;
+ }
+
+ const tapeType=$("tapeType").value;
+ if(["SPV","SPH","SPE"].includes(tapeType)){
+   tapeW=calcByTable({SPV,SPH,SPE}[tapeType],thick,total).value;
+ }
+
+ const deduct=tube+paperW+tapeW;
+ $(`tubeResult${index}`).textContent=tube.toFixed(2)+" kg";
+ $(`paperResult${index}`).textContent=paperW.toFixed(2)+" kg";
+ $(`tapeResult${index}`).textContent=tapeW.toFixed(2)+" kg";
+ $(`deductResult${index}`).textContent=deduct.toFixed(2)+" kg";
+}
+
+function clearResult(index){
+ $(`tubeResult${index}`).textContent="0.00 kg";
+ $(`paperResult${index}`).textContent="0.00 kg";
+ $(`tapeResult${index}`).textContent="0.00 kg";
+ $(`deductResult${index}`).textContent="0.00 kg";
+}
+
+function calc(){
+ const thick=Number($("thickness").value);
+ const w1=Number($("width1").value);
+ const t1=Number($("totalKg1").value);
+ const w2=Number($("width2").value);
+ const t2=Number($("totalKg2").value);
  const msg=$("message"); msg.className="";
 
- if(!(total>0) || !(width>0) || !(thick>0)){
-   msg.textContent="総重量・製品幅・製品厚みを入力してください。";
+ if(!(thick>0) || !(w1>0) || !(t1>0)){
+   msg.textContent="厚み・幅①・総重量①を入力してください。";
    msg.className="err"; return;
  }
  if($("paperUse").value===""){
    msg.textContent="間紙を選択してください。";
    msg.className="err"; return;
  }
+
  syncPaperTape();
+
  if($("paperUse").value!=="use" && $("tapeType").value===""){
    msg.textContent="テープを選択してください。";
    msg.className="err"; return;
@@ -401,36 +499,30 @@ function calc(){
    msg.textContent="選択した紙管・鉄リングと内径の係数がありません。";
    msg.className="err"; return;
  }
- const tube=type==="none"?0:coef*width;
 
- let paperW=0, tapeW=0, details=[];
- if($("paperUse").value==="use"){
-   const r=calcByTable(PAPER,thick,total);
-   paperW=r.value;
-   details.push(`間紙：厚み${r.key.toFixed(2)}mm / ${r.detail}`);
+ calcOne(w1,t1,1);
+
+ if((w2>0) || (t2>0)){
+   if(!(w2>0) || !(t2>0)){
+     msg.textContent="②を使う場合は、幅②と総重量②の両方を入力してください。";
+     msg.className="err";
+     return;
+   }
+   calcOne(w2,t2,2);
+   msg.textContent="①と②を計算しました。";
+ }else{
+   clearResult(2);
+   msg.textContent="①を計算しました。②は未入力です。";
  }
-
- const tapeType=$("tapeType").value;
- if(["SPV","SPH","SPE"].includes(tapeType)){
-   const table={SPV,SPH,SPE}[tapeType];
-   const r=calcByTable(table,thick,total);
-   tapeW=r.value;
-   details.push(`${tapeType}：厚み${r.key.toFixed(2)}mm / ${r.detail}`);
- }
-
- const deduct=tube+paperW+tapeW;
- $("tubeResult").textContent=tube.toFixed(2)+" kg";
- $("paperResult").textContent=paperW.toFixed(2)+" kg";
- $("tapeResult").textContent=tapeW.toFixed(2)+" kg";
- $("deductResult").textContent=deduct.toFixed(2)+" kg";
- msg.textContent="計算完了"+(details.length?"\n"+details.join("\n"):"");
  msg.className="ok";
 }
 $("calc").addEventListener("click",calc);
-["totalKg","width","thickness","paperUse","tapeType"].forEach(id=>{
- $(id).addEventListener("change",()=>{
+
+["width1","totalKg1","width2","totalKg2","thickness","paperUse","tapeType"].forEach(id=>{
+ const el=$(id);
+ if(!el) return;
+ el.addEventListener("change",()=>{
    if(id==="paperUse") syncPaperTape();
-   if($("totalKg").value&&$("width").value&&$("thickness").value&&$("paperUse").value&&($("paperUse").value==="use" || $("tapeType").value)) calc();
  });
 });
 syncPaperTape();
@@ -466,16 +558,20 @@ updateTube();
 
 <script>
 (function(){
-  const ids=["totalKg","width","thickness"];
+  const ids=["thickness","width1","totalKg1","width2","totalKg2"];
   const labels={
-    totalKg:"総重量（kg）",
-    width:"製品幅（mm）",
-    thickness:"製品厚み（mm）"
+    thickness:"製品厚み（mm）",
+    width1:"製品幅①（mm）",
+    totalKg1:"総重量①（kg）",
+    width2:"製品幅②（mm）",
+    totalKg2:"総重量②（kg）"
   };
   const colors={
-    totalKg:"#2f80ed",
-    width:"#27ae60",
-    thickness:"#f2994a"
+    thickness:"#f2994a",
+    width1:"#27ae60",
+    totalKg1:"#2f80ed",
+    width2:"#27ae60",
+    totalKg2:"#2f80ed"
   };
   const pad=document.getElementById("customKeypad");
   const back=document.getElementById("keypadBackdrop");
@@ -518,7 +614,7 @@ updateTube();
   back.addEventListener("click",closePad);
 
   // 入力・選択の流れ：
-  // 厚み → 幅 → 総重量 → 紙管/鉄リング種類 → 内径 → 間紙 → （間紙ありなら計算 / 間紙なしならテープ）
+  // 厚み → 幅① → 総重量① → 幅② → 総重量② → 紙管/鉄リング → 間紙 → 分岐
   const tubeTypeEl=document.getElementById("tubeType");
   const diameterEl=document.getElementById("diameter");
   const paperUseEl=document.getElementById("paperUse");
@@ -567,10 +663,14 @@ updateTube();
       closePad();
 
       if(currentId==="thickness"){
-        setTimeout(()=>openPad(document.getElementById("width")),120);
-      }else if(currentId==="width"){
-        setTimeout(()=>openPad(document.getElementById("totalKg")),120);
-      }else if(currentId==="totalKg"){
+        setTimeout(()=>openPad(document.getElementById("width1")),120);
+      }else if(currentId==="width1"){
+        setTimeout(()=>openPad(document.getElementById("totalKg1")),120);
+      }else if(currentId==="totalKg1"){
+        setTimeout(()=>openPad(document.getElementById("width2")),120);
+      }else if(currentId==="width2"){
+        setTimeout(()=>openPad(document.getElementById("totalKg2")),120);
+      }else if(currentId==="totalKg2"){
         const tubeType=document.getElementById("tubeType");
         if(tubeType){
           // iPad/Safari対策：ユーザー操作中に紙管・鉄リング選択を直接開く
