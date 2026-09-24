@@ -549,8 +549,40 @@ function calc(){
    msg.className="err"; return;
  }
  calcOne(w2,t2,2);
- msg.textContent="②を計算しました。";
+ msg.textContent="②を計算しました。結果を10秒表示します。10秒後に幅①へ戻ります。";
  msg.className="ok";
+
+ let remain2=10;
+ const timer2=setInterval(()=>{
+   remain2--;
+   if(remain2>0){
+     msg.textContent=`②を計算しました。結果を確認してください。あと${remain2}秒で幅①へ戻ります。`;
+   }else{
+     clearInterval(timer2);
+
+     // 次のセット用に①②の幅・重量と結果をリセット。厚み・FNoは残す。
+     ["width1","totalKg1","width2","totalKg2"].forEach(id=>{ const el=$(id); if(el) el.value=""; });
+     clearResult(1);
+     clearResult(2);
+
+     // 条件は①から同じ流れで選び直す
+     $("tubeType").value="";
+     $("diameter").value="";
+     $("paperUse").value="";
+     $("tapeType").value="";
+     $("tapeType").disabled=false;
+     $("tapeType").style.opacity="1";
+
+     calcStage=1;
+     $("calc").textContent="①を計算";
+     msg.textContent="次の計算を開始します。幅①から入力してください。";
+     msg.className="ok";
+
+     const w1=$("width1");
+     w1.scrollIntoView({behavior:"smooth",block:"center"});
+     setTimeout(()=>w1.click(),450);
+   }
+ },1000);
 }
 $("calc").addEventListener("click",calc);
 
