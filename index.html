@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#172033">
 <title>風袋計算</title>
-<!-- offline-v9: ①計算完了後に②の幅入力へ自動移動 -->
+<!-- offline-v10: ②も幅→重量→紙管・鉄リング→間紙→テープ→計算 -->
 <style>
 :root{--bg:#eef1f6;--card:#fff;--ink:#172033;--muted:#647084;--line:#dce2eb;--accent:#172033}
 *{box-sizing:border-box}
@@ -203,7 +203,7 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
   </div>
 </div>
 
-<div class="hint">入力順：厚み → 幅① → 総重量① → 紙管・鉄リング → 間紙 → 計算①。①の計算後、自動で幅②から始まります。</div>
+<div class="hint">入力順：① 幅→総重量→紙管・鉄リング→間紙→計算。①の計算後、②も 幅→総重量→紙管・鉄リング→間紙→計算 の同じ流れです。</div>
 </section>
 
 <section class="card">
@@ -519,7 +519,12 @@ function calc(){
    clearResult(2);
    calcStage=2;
    $("calc").textContent="②を計算";
-   msg.textContent="①を計算しました。次は幅②を入力してください。";
+   // ②では紙あり/なし・テープを改めて選べるようにする
+   $("paperUse").value="";
+   $("tapeType").disabled=false;
+   $("tapeType").style.opacity="1";
+   $("tapeType").value="";
+   msg.textContent="①を計算しました。次は幅②から、①と同じ順番で入力してください。";
    msg.className="ok";
    openSecondWidth();
    return;
@@ -634,7 +639,7 @@ updateTube();
 
   // 入力・選択の流れ：
   // ①：厚み → 幅① → 総重量① → 条件 → 計算①
-  // ②：計算①完了後 → 幅② → 総重量② → 計算②
+  // ②：計算①完了後 → 幅② → 総重量② → 紙管・鉄リング → 間紙 → 計算②
   const tubeTypeEl=document.getElementById("tubeType");
   const diameterEl=document.getElementById("diameter");
   const paperUseEl=document.getElementById("paperUse");
@@ -701,12 +706,17 @@ updateTube();
       }else if(currentId==="width2"){
         setTimeout(()=>openPad(document.getElementById("totalKg2")),120);
       }else if(currentId==="totalKg2"){
-        const calcBtn=document.getElementById("calc");
-        if(calcBtn){
-          calcBtn.scrollIntoView({behavior:"smooth",block:"center"});
-          calcBtn.style.outline="4px solid #2f80ed";
-          calcBtn.style.outlineOffset="3px";
-          setTimeout(()=>{ calcBtn.style.outline=""; calcBtn.style.outlineOffset=""; },1000);
+        // ②も①と同じく、重量入力後は紙管・鉄リングの種類へ進む
+        const tubeType=document.getElementById("tubeType");
+        if(tubeType){
+          tubeType.scrollIntoView({behavior:"smooth",block:"center"});
+          try{
+            if(typeof tubeType.showPicker==="function") tubeType.showPicker();
+            else { tubeType.focus({preventScroll:true}); tubeType.click(); }
+          }catch(_){ try{ tubeType.focus({preventScroll:true}); }catch(__){} }
+          tubeType.style.outline="4px solid #2f80ed";
+          tubeType.style.outlineOffset="3px";
+          setTimeout(()=>{ tubeType.style.outline=""; tubeType.style.outlineOffset=""; },1000);
         }
       }
       return;
