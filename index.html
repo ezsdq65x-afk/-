@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#172033">
 <title>風袋計算</title>
-<!-- offline-v6: iPad総重量→紙管/鉄リング選択の直接起動修正 -->
+<!-- offline-v7: 間紙ありならテープを飛ばして計算 / 間紙なしならテープへ -->
 <style>
 :root{--bg:#eef1f6;--card:#fff;--ink:#172033;--muted:#647084;--line:#dce2eb;--accent:#172033}
 *{box-sizing:border-box}
@@ -153,7 +153,7 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <div><label>製品幅（mm）</label><input id="width" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力"></div>
 <div><label>総重量（kg）</label><input id="totalKg" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力"></div>
 </div>
-<div class="hint">入力順：製品厚み → 製品幅 → 総重量 → 紙管・鉄リング → 間紙 → テープ → 計算。「完了」や選択後に次へ進みます。</div>
+<div class="hint">入力順：製品厚み → 製品幅 → 総重量 → 紙管・鉄リング → 間紙。間紙ありならそのまま計算、間紙なしならテープへ進みます。</div>
 </section>
 
 <section class="card">
@@ -185,7 +185,7 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <option value="none">紙なし</option>
 <option value="use">紙入り</option>
 </select>
-<div class="hint">紙入りなら、製品厚み＋総重量から間紙換算質量表を使って自動計算します。</div>
+<div class="hint">紙入りなら、製品厚み＋総重量から間紙換算質量表を使って自動計算します。※間紙ありの時はテープは自動で「なし」になります。</div>
 </section>
 
 <section class="card">
@@ -198,7 +198,7 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <option value="SPH">SPH</option>
 <option value="SPE">SPE</option>
 </select>
-<div class="hint">テープも製品厚み＋総重量から、選択したSPV・SPH・SPEの換算表で自動計算します。</div>
+<div class="hint">テープも製品厚み＋総重量から、選択したSPV・SPH・SPEの換算表で自動計算します。※間紙ありの時はテープ入力をスキップします。</div>
 </section>
 
 <section class="card results">
@@ -362,6 +362,19 @@ function updateTube(){
 $("tubeType").addEventListener("change",updateTube);
 $("diameter").addEventListener("change",updateTube);
 
+function syncPaperTape(){
+ const paperUse=$("paperUse").value;
+ const tapeEl=$("tapeType");
+ if(paperUse==="use"){
+   tapeEl.value="none";
+   tapeEl.disabled=true;
+   tapeEl.style.opacity="0.55";
+ }else{
+   tapeEl.disabled=false;
+   tapeEl.style.opacity="1";
+ }
+}
+
 function calc(){
  const total=Number($("totalKg").value);
  const width=Number($("width").value);
@@ -376,7 +389,8 @@ function calc(){
    msg.textContent="間紙を選択してください。";
    msg.className="err"; return;
  }
- if($("tapeType").value===""){
+ syncPaperTape();
+ if($("paperUse").value!=="use" && $("tapeType").value===""){
    msg.textContent="テープを選択してください。";
    msg.className="err"; return;
  }
@@ -414,8 +428,12 @@ function calc(){
 }
 $("calc").addEventListener("click",calc);
 ["totalKg","width","thickness","paperUse","tapeType"].forEach(id=>{
- $(id).addEventListener("change",()=>{if($("totalKg").value&&$("width").value&&$("thickness").value)calc();});
+ $(id).addEventListener("change",()=>{
+   if(id==="paperUse") syncPaperTape();
+   if($("totalKg").value&&$("width").value&&$("thickness").value&&$("paperUse").value&&($("paperUse").value==="use" || $("tapeType").value)) calc();
+ });
 });
+syncPaperTape();
 updateTube();
 </script>
 
@@ -500,7 +518,7 @@ updateTube();
   back.addEventListener("click",closePad);
 
   // 入力・選択の流れ：
-  // 厚み → 幅 → 総重量 → 紙管/鉄リング種類 → 内径 → 間紙 → テープ → 計算
+  // 厚み → 幅 → 総重量 → 紙管/鉄リング種類 → 内径 → 間紙 → （間紙ありなら計算 / 間紙なしならテープ）
   const tubeTypeEl=document.getElementById("tubeType");
   const diameterEl=document.getElementById("diameter");
   const paperUseEl=document.getElementById("paperUse");
@@ -528,7 +546,11 @@ updateTube();
     diameterEl.addEventListener("change",()=>moveTo(paperUseEl));
   }
   if(paperUseEl){
-    paperUseEl.addEventListener("change",()=>moveTo(tapeTypeEl));
+    paperUseEl.addEventListener("change",()=>{
+      syncPaperTape();
+      if(paperUseEl.value==="use") moveTo(calcBtnEl);
+      else if(paperUseEl.value==="none") moveTo(tapeTypeEl);
+    });
   }
   if(tapeTypeEl){
     tapeTypeEl.addEventListener("change",()=>moveTo(calcBtnEl));
