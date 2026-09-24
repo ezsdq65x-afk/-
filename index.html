@@ -161,6 +161,30 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
   .dual-title{font-size:16px}
 }
 
+
+/* ===== iPhone用 紙管・鉄リング 自動選択パネル ===== */
+.quick-picker-backdrop{
+  position:fixed; inset:0; background:rgba(15,23,42,.42);
+  z-index:10020; display:none;
+}
+.quick-picker{
+  position:fixed; left:10px; right:10px; bottom:10px;
+  z-index:10021; display:none;
+  background:#fff; border-radius:22px;
+  box-shadow:0 -10px 30px rgba(0,0,0,.18);
+  padding:14px max(14px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));
+}
+.quick-picker.open,.quick-picker-backdrop.open{display:block}
+.quick-picker h3{margin:2px 0 12px;font-size:20px}
+.quick-picker-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.quick-picker button{
+  margin:0; padding:15px 10px; min-height:54px;
+  border-radius:14px; font-size:17px; background:#eef4ff; color:#172033;
+  border:2px solid #cfe0ff;
+}
+.quick-picker button[data-value="ring"]{background:#fff3e8;border-color:#ffd4a8}
+.quick-picker button[data-value="none"]{background:#f2f2f2;border-color:#ddd}
+
 </style>
 <link rel="manifest" href="./manifest.webmanifest">
 <meta name="theme-color" content="#172033">
@@ -736,32 +760,11 @@ updateTube();
       }else if(currentId==="width1"){
         setTimeout(()=>openPad(document.getElementById("totalKg1")),120);
       }else if(currentId==="totalKg1"){
-        const tubeType=document.getElementById("tubeType");
-        if(tubeType){
-          tubeType.scrollIntoView({behavior:"smooth",block:"center"});
-          try{
-            if(typeof tubeType.showPicker==="function") tubeType.showPicker();
-            else { tubeType.focus({preventScroll:true}); tubeType.click(); }
-          }catch(_){ try{ tubeType.focus({preventScroll:true}); }catch(__){} }
-          tubeType.style.outline="4px solid #2f80ed";
-          tubeType.style.outlineOffset="3px";
-          setTimeout(()=>{ tubeType.style.outline=""; tubeType.style.outlineOffset=""; },1000);
-        }
+        setTimeout(openTubeQuickPicker,120);
       }else if(currentId==="width2"){
         setTimeout(()=>openPad(document.getElementById("totalKg2")),120);
       }else if(currentId==="totalKg2"){
-        // ②も①と同じく、重量入力後は紙管・鉄リングの種類へ進む
-        const tubeType=document.getElementById("tubeType");
-        if(tubeType){
-          tubeType.scrollIntoView({behavior:"smooth",block:"center"});
-          try{
-            if(typeof tubeType.showPicker==="function") tubeType.showPicker();
-            else { tubeType.focus({preventScroll:true}); tubeType.click(); }
-          }catch(_){ try{ tubeType.focus({preventScroll:true}); }catch(__){} }
-          tubeType.style.outline="4px solid #2f80ed";
-          tubeType.style.outlineOffset="3px";
-          setTimeout(()=>{ tubeType.style.outline=""; tubeType.style.outlineOffset=""; },1000);
-        }
+        setTimeout(openTubeQuickPicker,120);
       }
       return;
     }
@@ -787,11 +790,65 @@ updateTube();
 </script>
 
 <script>
+
+function openTubeQuickPicker(){
+  const picker=document.getElementById("tubeQuickPicker");
+  const back=document.getElementById("tubeQuickBackdrop");
+  const tube=document.getElementById("tubeType");
+  if(!picker || !back || !tube) return;
+  tube.scrollIntoView({behavior:"smooth",block:"center"});
+  tube.style.outline="4px solid #2f80ed";
+  tube.style.outlineOffset="3px";
+  picker.classList.add("open");
+  back.classList.add("open");
+}
+function closeTubeQuickPicker(){
+  const picker=document.getElementById("tubeQuickPicker");
+  const back=document.getElementById("tubeQuickBackdrop");
+  const tube=document.getElementById("tubeType");
+  if(picker) picker.classList.remove("open");
+  if(back) back.classList.remove("open");
+  if(tube){ tube.style.outline=""; tube.style.outlineOffset=""; }
+}
+document.addEventListener("DOMContentLoaded",()=>{
+  const picker=document.getElementById("tubeQuickPicker");
+  const back=document.getElementById("tubeQuickBackdrop");
+  const tube=document.getElementById("tubeType");
+  if(picker && tube){
+    picker.addEventListener("click",e=>{
+      const b=e.target.closest("button[data-value]");
+      if(!b) return;
+      tube.value=b.dataset.value;
+      closeTubeQuickPicker();
+      tube.dispatchEvent(new Event("change",{bubbles:true}));
+    });
+  }
+  if(back) back.addEventListener("click",closeTubeQuickPicker);
+});
+
+</script>
+
+<script>
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", function () {
     navigator.serviceWorker.register("./sw.js").catch(function(){});
   });
 }
 </script>
+
+<div id="tubeQuickBackdrop" class="quick-picker-backdrop"></div>
+<div id="tubeQuickPicker" class="quick-picker" aria-modal="true" role="dialog">
+  <h3>紙管・鉄リングの種類を選択</h3>
+  <div class="quick-picker-grid">
+    <button type="button" data-value="none">なし</button>
+    <button type="button" data-value="normal">普通紙管</button>
+    <button type="button" data-value="normal10">普通紙管 10mm</button>
+    <button type="button" data-value="hard">硬強度紙管</button>
+    <button type="button" data-value="hard10">硬強度紙管 10mm</button>
+    <button type="button" data-value="hard15">硬強度紙管 15mm</button>
+    <button type="button" data-value="ring">鉄リング</button>
+  </div>
+</div>
+
 </body>
 </html>
