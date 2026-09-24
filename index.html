@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#172033">
 <title>風袋計算</title>
-<!-- offline-v10: ②も幅→重量→紙管・鉄リング→間紙→テープ→計算 -->
+<!-- offline-v11: ①結果を10秒表示→②幅から開始 -->
 <style>
 :root{--bg:#eef1f6;--card:#fff;--ink:#172033;--muted:#647084;--line:#dce2eb;--accent:#172033}
 *{box-sizing:border-box}
@@ -524,9 +524,21 @@ function calc(){
    $("tapeType").disabled=false;
    $("tapeType").style.opacity="1";
    $("tapeType").value="";
-   msg.textContent="①を計算しました。次は幅②から、①と同じ順番で入力してください。";
+   msg.textContent="①を計算しました。結果を10秒表示します。10秒後に幅②へ進みます。";
    msg.className="ok";
-   openSecondWidth();
+
+   let remain=10;
+   const timer=setInterval(()=>{
+     remain--;
+     if(remain>0){
+       msg.textContent=`①を計算しました。結果を確認してください。あと${remain}秒で幅②へ進みます。`;
+     }else{
+       clearInterval(timer);
+       msg.textContent="②を入力してください。幅②からスタートします。";
+       msg.className="ok";
+       openSecondWidth();
+     }
+   },1000);
    return;
  }
 
