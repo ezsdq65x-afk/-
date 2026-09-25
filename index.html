@@ -479,7 +479,11 @@ function calcOne(width,total,index){
    tapeW=calcByTable({SPV,SPH,SPE}[tapeType],thick,total).value;
  }
 
- const deduct=tube+paperW+tapeW;
+ const tubeRounded=Math.round(tube);
+ const paperRounded=Math.round(paperW);
+ const tapeRounded=Math.round(tapeW);
+ const deduct=tubeRounded+paperRounded+tapeRounded;
+ const deductRaw=tube+paperW+tapeW;
 
  function fmt(v){
    return Math.round(v)+" kg ("+v.toFixed(2)+" kg)";
@@ -488,7 +492,7 @@ function calcOne(width,total,index){
  $(`tubeResult${index}`).textContent=fmt(tube);
  $(`paperResult${index}`).textContent=fmt(paperW);
  $(`tapeResult${index}`).textContent=fmt(tapeW);
- $(`deductResult${index}`).textContent=fmt(deduct);
+ $(`deductResult${index}`).textContent=deduct+" kg ("+deductRaw.toFixed(2)+" kg)";
 }
 
 function clearResult(index){
