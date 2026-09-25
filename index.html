@@ -185,6 +185,11 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 .quick-picker button[data-value="ring"]{background:#fff3e8;border-color:#ffd4a8}
 .quick-picker button[data-value="none"]{background:#f2f2f2;border-color:#ddd}
 
+
+.choice-group{display:grid;gap:10px;margin-top:10px}.choice-group.two{grid-template-columns:repeat(2,1fr)}.choice-group.three{grid-template-columns:repeat(3,1fr)}.choice-group.four,.choice-group.tube{grid-template-columns:repeat(2,1fr)}
+.choice-btn{margin:0;min-height:54px;padding:12px 8px;border-radius:14px;border:2px solid #d8dee8;background:#fff;color:#172033;font-size:17px;font-weight:900}
+.choice-btn.selected{background:#e8f1ff;border-color:#2f80ed;color:#154aa8}.choice-btn.orange.selected{background:#fff1e6;border-color:#f2994a}.choice-btn.green.selected{background:#eaf8ef;border-color:#27ae60}.choice-btn.purple.selected{background:#f3eaff;border-color:#7b2cbf}
+.native-select-hidden{position:absolute!important;opacity:0!important;pointer-events:none!important;width:1px!important;height:1px!important}
 </style>
 <link rel="manifest" href="./manifest.webmanifest">
 <meta name="theme-color" content="#172033">
@@ -233,7 +238,7 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <section class="card">
 <h2>② 紙管・鉄リング</h2>
 <div class="grid">
-<div><label>種類</label><select id="tubeType">
+<div><label>種類</label><select id="tubeType" class="native-select-hidden">
 <option value="none">なし</option>
 <option value="normal">普通紙管</option>
 <option value="normal10">普通紙管 10mm</option>
@@ -241,12 +246,22 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <option value="hard10">硬強度紙管 10mm</option>
 <option value="hard15">硬強度紙管 15mm</option>
 <option value="ring">鉄リング</option>
-</select></div>
-<div><label>内径</label><select id="diameter">
+</select><div id="tubeButtons" class="choice-group tube">
+<button type="button" class="choice-btn" data-target="tubeType" data-value="none">なし</button>
+<button type="button" class="choice-btn" data-target="tubeType" data-value="normal">普通紙管</button>
+<button type="button" class="choice-btn" data-target="tubeType" data-value="normal10">普通紙管 10mm</button>
+<button type="button" class="choice-btn" data-target="tubeType" data-value="hard">硬強度紙管</button>
+<button type="button" class="choice-btn" data-target="tubeType" data-value="hard10">硬強度紙管 10mm</button>
+<button type="button" class="choice-btn" data-target="tubeType" data-value="hard15">硬強度紙管 15mm</button>
+<button type="button" class="choice-btn orange" data-target="tubeType" data-value="ring">鉄リング</button></div></div>
+<div><label>内径</label><select id="diameter" class="native-select-hidden">
 <option value="300">φ300</option>
 <option value="400">φ400</option>
 <option value="500" selected>φ500</option>
-</select></div>
+</select><div id="diameterButtons" class="choice-group three">
+<button type="button" class="choice-btn green" data-target="diameter" data-value="300">φ300</button>
+<button type="button" class="choice-btn green" data-target="diameter" data-value="400">φ400</button>
+<button type="button" class="choice-btn green" data-target="diameter" data-value="500">φ500</button></div></div>
 </div>
 <div id="tubeHint" class="hint"></div><div class="hint">※写真の比重表にある組み合わせだけ選択できます。</div>
 </section>
@@ -254,24 +269,30 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <section class="card">
 <h2>③ 間紙</h2>
 <label>紙の有無</label>
-<select id="paperUse">
+<select id="paperUse" class="native-select-hidden">
 <option value="" selected disabled>選択してください</option>
 <option value="none">紙なし</option>
 <option value="use">紙入り</option>
-</select>
+</select><div id="paperButtons" class="choice-group two">
+<button type="button" class="choice-btn purple" data-target="paperUse" data-value="none">紙なし</button>
+<button type="button" class="choice-btn purple" data-target="paperUse" data-value="use">紙入り</button></div>
 <div class="hint">紙入りなら、製品厚み＋総重量から間紙換算質量表を使って自動計算します。※間紙ありの時はテープは自動で「なし」になります。</div>
 </section>
 
 <section class="card">
 <h2>④ テープ</h2>
 <label>テープ種類</label>
-<select id="tapeType">
+<select id="tapeType" class="native-select-hidden">
 <option value="" selected disabled>選択してください</option>
 <option value="none">なし</option>
 <option value="SPV">SPV</option>
 <option value="SPH">SPH</option>
 <option value="SPE">SPE</option>
-</select>
+</select><div id="tapeButtons" class="choice-group four">
+<button type="button" class="choice-btn" data-target="tapeType" data-value="none">なし</button>
+<button type="button" class="choice-btn" data-target="tapeType" data-value="SPV">SPV</button>
+<button type="button" class="choice-btn" data-target="tapeType" data-value="SPH">SPH</button>
+<button type="button" class="choice-btn" data-target="tapeType" data-value="SPE">SPE</button></div>
 <div class="hint">テープも製品厚み＋総重量から、選択したSPV・SPH・SPEの換算表で自動計算します。※間紙ありの時はテープ入力をスキップします。</div>
 </section>
 
@@ -769,11 +790,11 @@ updateTube();
       }else if(currentId==="width1"){
         setTimeout(()=>openPad(document.getElementById("totalKg1")),120);
       }else if(currentId==="totalKg1"){
-        setTimeout(openTubeQuickPicker,120);
+        setTimeout(()=>{const a=document.getElementById("tubeButtons");if(a)a.scrollIntoView({behavior:"smooth",block:"center"});},120);
       }else if(currentId==="width2"){
         setTimeout(()=>openPad(document.getElementById("totalKg2")),120);
       }else if(currentId==="totalKg2"){
-        setTimeout(openTubeQuickPicker,120);
+        setTimeout(()=>{const a=document.getElementById("tubeButtons");if(a)a.scrollIntoView({behavior:"smooth",block:"center"});},120);
       }
       return;
     }
@@ -837,6 +858,23 @@ document.addEventListener("DOMContentLoaded",()=>{
 
 </script>
 
+<script>
+function syncChoiceButtons(id){
+ const sel=document.getElementById(id); if(!sel)return;
+ document.querySelectorAll('.choice-btn[data-target="'+id+'"]').forEach(b=>b.classList.toggle('selected',b.dataset.value===sel.value));
+}
+function refreshAllChoiceButtons(){['tubeType','diameter','paperUse','tapeType'].forEach(syncChoiceButtons);}
+document.addEventListener('DOMContentLoaded',()=>{
+ document.querySelectorAll('.choice-btn[data-target]').forEach(btn=>btn.addEventListener('click',()=>{
+   const id=btn.dataset.target, sel=document.getElementById(id); if(!sel)return;
+   sel.value=btn.dataset.value; sel.dispatchEvent(new Event('change',{bubbles:true})); refreshAllChoiceButtons();
+   const next=id==='tubeType'?'diameterButtons':id==='diameter'?'paperButtons':id==='paperUse'&&sel.value==='none'?'tapeButtons':null;
+   if(next){const el=document.getElementById(next); if(el)el.scrollIntoView({behavior:'smooth',block:'center'});}
+   else if(id==='paperUse'||id==='tapeType'){const c=document.getElementById('calc'); if(c)c.scrollIntoView({behavior:'smooth',block:'center'});}
+ }));
+ refreshAllChoiceButtons();
+});
+</script>
 <script>
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", function () {
