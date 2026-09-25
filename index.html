@@ -280,18 +280,18 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <div class="dual-results">
   <div class="result-mini dual-box left">
     <div class="dual-title">① 左側の結果</div>
-    <div class="row"><span>紙管・鉄リング</span><b id="tubeResult1">0.00 kg</b></div>
-    <div class="row"><span>間紙</span><b id="paperResult1">0.00 kg</b></div>
-    <div class="row"><span>テープ</span><b id="tapeResult1">0.00 kg</b></div>
-    <div class="total"><small>合計控除重量①</small><b id="deductResult1">0.00 kg</b></div>
+    <div class="row"><span>紙管・鉄リング</span><b id="tubeResult1">0 kg (0.00 kg)</b></div>
+    <div class="row"><span>間紙</span><b id="paperResult1">0 kg (0.00 kg)</b></div>
+    <div class="row"><span>テープ</span><b id="tapeResult1">0 kg (0.00 kg)</b></div>
+    <div class="total"><small>合計控除重量①</small><b id="deductResult1">0 kg (0.00 kg)</b></div>
   </div>
 
   <div class="result-mini dual-box right">
     <div class="dual-title">② 右側の結果</div>
-    <div class="row"><span>紙管・鉄リング</span><b id="tubeResult2">0.00 kg</b></div>
-    <div class="row"><span>間紙</span><b id="paperResult2">0.00 kg</b></div>
-    <div class="row"><span>テープ</span><b id="tapeResult2">0.00 kg</b></div>
-    <div class="total"><small>合計控除重量②</small><b id="deductResult2">0.00 kg</b></div>
+    <div class="row"><span>紙管・鉄リング</span><b id="tubeResult2">0 kg (0.00 kg)</b></div>
+    <div class="row"><span>間紙</span><b id="paperResult2">0 kg (0.00 kg)</b></div>
+    <div class="row"><span>テープ</span><b id="tapeResult2">0 kg (0.00 kg)</b></div>
+    <div class="total"><small>合計控除重量②</small><b id="deductResult2">0 kg (0.00 kg)</b></div>
   </div>
 </div>
 <div id="message"></div>
@@ -480,17 +480,22 @@ function calcOne(width,total,index){
  }
 
  const deduct=tube+paperW+tapeW;
- $(`tubeResult${index}`).textContent=tube.toFixed(2)+" kg";
- $(`paperResult${index}`).textContent=paperW.toFixed(2)+" kg";
- $(`tapeResult${index}`).textContent=tapeW.toFixed(2)+" kg";
- $(`deductResult${index}`).textContent=deduct.toFixed(2)+" kg";
+
+ function fmt(v){
+   return Math.round(v)+" kg ("+v.toFixed(2)+" kg)";
+ }
+
+ $(`tubeResult${index}`).textContent=fmt(tube);
+ $(`paperResult${index}`).textContent=fmt(paperW);
+ $(`tapeResult${index}`).textContent=fmt(tapeW);
+ $(`deductResult${index}`).textContent=fmt(deduct);
 }
 
 function clearResult(index){
- $(`tubeResult${index}`).textContent="0.00 kg";
- $(`paperResult${index}`).textContent="0.00 kg";
- $(`tapeResult${index}`).textContent="0.00 kg";
- $(`deductResult${index}`).textContent="0.00 kg";
+ $(`tubeResult${index}`).textContent="0 kg (0.00 kg)";
+ $(`paperResult${index}`).textContent="0 kg (0.00 kg)";
+ $(`tapeResult${index}`).textContent="0 kg (0.00 kg)";
+ $(`deductResult${index}`).textContent="0 kg (0.00 kg)";
 }
 
 let calcStage=1;
