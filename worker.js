@@ -1,69 +1,89 @@
+const MODEL = "@cf/meta/llama-3.2-11b-vision-instruct";
+const ALLOWED_ORIGIN = "https://ezsdq65x-afk.github.io";
+
+const cors = {
+  "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+function respond(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...cors, "Content-Type": "application/json; charset=utf-8" },
+  });
+}
+
+function parseJson(text) {
+  const cleaned = String(text || "")
+    .replace(/```json/gi, "")
+    .replace(/```/g, "")
+    .trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start < 0 || end < start) throw new Error("AI did not return JSON");
+  return JSON.parse(cleaned.slice(start, end + 1));
+}
+
+function normalize(o = {}) {
+  const keys = ["thickness","width","inner","paper","ring","core","tape","fno"];
+  const r = Object.fromEntries(keys.map(k => [k, o[k] == null ? "" : String(o[k]).trim()]));
+
+  if (!["300","400","500"].includes(r.inner)) r.inner = "";
+  if (!["あり","なし"].includes(r.paper)) r.paper = "";
+  if (!["P","T","なし"].includes(r.ring)) r.ring = "";
+  if (!["普通紙管","高強度紙管","鉄リング","なし"].includes(r.core)) r.core = "";
+  if (!["SPE","SPV","SPH","なし"].includes(r.tape)) r.tape = "";
+  return r;
+}
+
 export default {
   async fetch(request, env) {
-    const cors = {
-      "Access-Control-Allow-Origin": "https://ezsdq65x-afk.github.io",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type"
-    };
-
     if (request.method === "OPTIONS") {
-      return new Response(null, { headers: cors });
+      return new Response(null, { status: 204, headers: cors });
     }
-
-    if (request.method !== "POST") {
-      return new Response(JSON.stringify({ message: "tare-slip-ai is ready" }), {
-        headers: { ...cors, "Content-Type": "application/json" }
-      });
-    }
+    if (request.method !== "POST") return respond({ error: "POST only" }, 405);
 
     try {
-      const { image } = await request.json();
-      if (!image) throw new Error("画像がありません");
-
-      const prompt = `日本の工場で使用する伝票を読み取り、JSONだけを返してください。推測は禁止。読めない項目は空文字にしてください。
-形式:
-{"thickness":"","width":"","inner":"","paper":"","ring":"","core":"","tape":"","fno":""}
-ルール:
-厚みは製品厚み。
-幅は見た数字をそのまま読み、72を172にしない。
-内径は300/400/500。
-紙欄が×ならpaper=なし、数字ならpaper=あり。
-Pならring=P。Tならring=T。
-Pでコウキョウドシカンまたは高強度紙管ならcore=硬強度。
-Pでその記載がなければcore=普通紙管。
-Tならcore=鉄リング。
-仕上げにEを含む場合（例2E99）はtape=SPE。
-SPVならSPV、SPHならSPH。
-F-Noが読めればfnoへ。
-不明な値を勝手に補完しない。`;
-
-      const result = await env.AI.run(
-        "@cf/meta/llama-3.2-11b-vision-instruct",
-        { prompt, image, max_tokens: 700 }
-      );
-
-      let text = (result.response || "")
-        .replace(/```json/gi, "")
-        .replace(/```/g, "")
-        .trim();
-
-      const a = text.indexOf("{");
-      const b = text.lastIndexOf("}");
-      if (a < 0 || b < 0) {
-        throw new Error("AIの回答をJSONに変換できませんでした");
+      const body = await request.json();
+      if (typeof body.image !== "string" || !body.image.startsWith("data:image/")) {
+        return respond({ error: "Image data is missing" }, 400);
       }
 
-      const data = JSON.parse(text.slice(a, b + 1));
+      const prompt = `Read this Japanese stainless-steel coil work slip.
+Return ONLY this JSON object:
+{"thickness":"","width":"","inner":"","paper":"","ring":"","core":"","tape":"","fno":""}
 
-      return new Response(JSON.stringify(data), {
-        headers: { ...cors, "Content-Type": "application/json" }
+Rules:
+- Never guess. If unreadable or uncertain, use "".
+- thickness: product thickness exactly printed, number only.
+- width: product width exactly printed, number only. NEVER add a leading digit. If it says 72, return "72", not "172".
+- inner: only "300", "400", or "500".
+- paper/interleaf column: × => "なし"; numeric entry => "あり".
+- ring: P => "P"; T => "T"; clearly neither => "なし".
+- core: P plus コウキョウドシカン or 高強度紙管 => "高強度紙管"; P otherwise => "普通紙管"; T => "鉄リング"; clearly none => "なし".
+- tape: explicit SPV => "SPV"; explicit SPH => "SPH"; finish containing E such as 2E99 or E6B => "SPE"; clearly none => "なし".
+- fno: F-No/Fno exactly visible, e.g. 18-441-50.
+- Read the whole slip including small printed notes near P/T.
+- JSON only. No markdown.`;
+
+      const result = await env.AI.run(MODEL, {
+        prompt,
+        image: body.image,
+        max_tokens: 350,
+        temperature: 0,
       });
 
-    } catch (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 500,
-        headers: { ...cors, "Content-Type": "application/json" }
-      });
+      return respond(normalize(parseJson(result?.response || result)));
+    } catch (e) {
+      const msg = String(e?.message || e);
+      return respond({
+        error: "AI_READ_FAILED",
+        details: msg,
+        hint: /license|agree|5016/i.test(msg)
+          ? "META_LICENSE_AGREEMENT_REQUIRED"
+          : ""
+      }, 500);
     }
   }
 };
