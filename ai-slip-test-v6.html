@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>風袋計算 AI伝票読取 V6</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;background:#eef1f6;color:#172033}
+.wrap{max-width:760px;margin:auto;padding:18px}
+.card{background:white;border-radius:18px;padding:18px;margin:14px 0;box-shadow:0 2px 12px #0001}
+h1{font-size:24px;margin:4px 0 10px} h2{font-size:18px}
+button,label.btn{display:block;width:100%;box-sizing:border-box;border:0;border-radius:14px;padding:16px;font-size:18px;font-weight:700;text-align:center;background:#1769e0;color:white;margin:10px 0}
+input[type=file]{display:none} img{width:100%;border-radius:12px;display:none}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.field{padding:10px;border:2px solid #d8deea;border-radius:12px}
+.field.bad{border-color:#e5484d;background:#fff0f0}.field.good{border-color:#2b9a66;background:#effbf5}
+.field label{font-size:12px;color:#657084}.field input,.field select{width:100%;box-sizing:border-box;border:0;background:transparent;font-size:19px;padding:6px 0;outline:none}
+.note{font-size:13px;color:#657084;line-height:1.5}.status{font-weight:700;line-height:1.5}
+.endpoint{width:100%;box-sizing:border-box;padding:12px;border:1px solid #ccd3df;border-radius:10px;font-size:16px}
+pre{white-space:pre-wrap;word-break:break-word;background:#f5f7fa;padding:10px;border-radius:10px;font-size:12px}
+</style>
+</head>
+<body><div class="wrap">
+<h1>📷 AI伝票読取 V6</h1>
+<div class="card">
+  <div class="status" id="status">伝票を1枚撮影してください。</div>
+  <label class="btn" for="photo">伝票を撮る / 写真を選ぶ</label>
+  <input id="photo" type="file" accept="image/*" capture="environment">
+  <img id="preview">
+  <button id="readBtn" disabled>AIで伝票全体を読む</button>
+  <div class="note">範囲指定は不要。読めなかった項目だけ赤で残します。</div>
+</div>
+
+<div class="card">
+<h2>読取結果</h2>
+<div class="grid">
+ <div class="field" id="f_thickness"><label>厚み</label><input id="thickness" inputmode="decimal"></div>
+ <div class="field" id="f_width"><label>幅</label><input id="width" inputmode="decimal"></div>
+ <div class="field" id="f_inner"><label>内径</label><select id="inner"><option value=""></option><option>300</option><option>400</option><option>500</option></select></div>
+ <div class="field" id="f_paper"><label>間紙</label><select id="paper"><option value=""></option><option value="あり">あり</option><option value="なし">なし</option></select></div>
+ <div class="field" id="f_ring"><label>リング/紙管</label><select id="ring"><option value=""></option><option value="P">P（紙管）</option><option value="T">T（鉄リング）</option><option value="なし">なし</option></select></div>
+ <div class="field" id="f_core"><label>紙管種類</label><select id="core"><option value=""></option><option>普通紙管</option><option>硬強度</option><option>鉄リング</option><option>なし</option></select></div>
+ <div class="field" id="f_tape"><label>テープ</label><select id="tape"><option value=""></option><option>SPE</option><option>SPV</option><option>SPH</option><option>なし</option></select></div>
+ <div class="field" id="f_fno"><label>FNo</label><input id="fno"></div>
+</div>
+<p class="note">ルール：紙欄×＝紙なし、数字＝紙あり。P＝紙管、T＝鉄リング。「高強度紙管」表記は硬強度。仕上げ欄のE（例 2E99）＝SPE。SPV/SPHは文字を読む。</p>
+</div>
+
+<div class="card">
+<h2>接続設定</h2>
+<input class="endpoint" id="endpoint" placeholder="AI中継URLをここに設定">
+<p class="note">GitHubのHTMLにAPIキーは入れません。次に安全なAI中継を1回だけ設定すれば、このV6から写真を送れます。</p>
+</div>
+
+<div class="card"><details><summary>診断情報</summary><pre id="debug">まだありません</pre></details></div>
+</div>
+<script>
+let dataUrl="";
+const ids=["thickness","width","inner","paper","ring","core","tape","fno"];
+const photo=document.getElementById("photo"), preview=document.getElementById("preview");
+photo.onchange=()=>{
+ const f=photo.files[0]; if(!f)return;
+ const r=new FileReader();
+ r.onload=()=>{dataUrl=r.result;preview.src=dataUrl;preview.style.display="block";readBtn.disabled=false;status.textContent="写真OK。『AIで伝票全体を読む』を押してください。";};
+ r.readAsDataURL(f);
+};
+function paint(id,ok){document.getElementById("f_"+id).className="field "+(ok?"good":"bad")}
+async function readSlip(){
+ const endpoint=document.getElementById("endpoint").value.trim();
+ if(!endpoint){status.textContent="⚠️ まだAI中継URLが未設定です。次の手順で設定します。";return;}
+ status.textContent="AI読取中…";
+ try{
+  const res=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({image:dataUrl})});
+  const j=await res.json(); debug.textContent=JSON.stringify(j,null,2);
+  ids.forEach(id=>{let v=j[id]??""; document.getElementById(id).value=v; paint(id,String(v).trim()!=="")});
+  status.textContent="読取完了。緑＝読取、赤＝確認・手入力。";
+ }catch(e){status.textContent="❌ 接続エラー："+e.message;debug.textContent=String(e)}
+}
+readBtn.onclick=readSlip;
+ids.forEach(id=>document.getElementById(id).addEventListener("input",e=>paint(id,e.target.value.trim()!=="")));
+</script></body></html>
