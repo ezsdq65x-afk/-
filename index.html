@@ -190,6 +190,13 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 .choice-btn{margin:0;min-height:54px;padding:12px 8px;border-radius:14px;border:2px solid #d8dee8;background:#fff;color:#172033;font-size:17px;font-weight:900}
 .choice-btn.selected{background:#e8f1ff;border-color:#2f80ed;color:#154aa8}.choice-btn.orange.selected{background:#fff1e6;border-color:#f2994a}.choice-btn.green.selected{background:#eaf8ef;border-color:#27ae60}.choice-btn.purple.selected{background:#f3eaff;border-color:#7b2cbf}
 .native-select-hidden{position:absolute!important;opacity:0!important;pointer-events:none!important;width:1px!important;height:1px!important}
+
+/* ===== ChatGPT伝票読取ボタン ===== */
+.chatgpt-slip-box{margin:18px 0 16px;padding:14px;border-radius:18px;background:#eefbf6;border:2px solid #24a06b;text-align:center}
+.chatgpt-slip-btn{display:block;width:100%;box-sizing:border-box;padding:17px 12px;border-radius:15px;background:#111827;color:#fff!important;text-decoration:none;font-size:21px;font-weight:900;box-shadow:0 7px 16px rgba(17,24,39,.18)}
+.chatgpt-slip-btn:active{transform:translateY(1px)}
+.chatgpt-slip-note{margin-top:9px;font-size:14px;line-height:1.55;color:#475569;font-weight:700}
+
 </style>
 <link rel="manifest" href="./manifest.webmanifest">
 <meta name="theme-color" content="#172033">
@@ -201,6 +208,11 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <main>
 <div class="title">風袋計算</div>
 <div class="sub">紙管・鉄リング・間紙・テープを自動計算</div>
+
+<div class="chatgpt-slip-box">
+  <div class="chatgpt-slip-note"><b>📷 iPadのChatGPTで伝票＋秤を撮影</b><br>この会話に写真を送信 → 返ってきた「風袋計算URL」をタップすると、この画面へ自動入力</div>
+</div>
+
 
 <section class="card">
 <h2>① 基本情報</h2>
