@@ -197,6 +197,18 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 .chatgpt-slip-btn:active{transform:translateY(1px)}
 .chatgpt-slip-note{margin-top:9px;font-size:14px;line-height:1.55;color:#475569;font-weight:700}
 
+
+/* ===== 携帯→iPad 自動受信 ===== */
+.relay-card{border:3px solid #2f80ed;background:#f5f9ff}
+.relay-status{font-size:18px;font-weight:900;margin:8px 0}
+.relay-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:16px;word-break:break-all;background:#fff;border:2px dashed #2f80ed;border-radius:12px;padding:12px;margin:10px 0;user-select:all;-webkit-user-select:all}
+.relay-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.relay-actions button{font-size:16px;padding:12px;margin-top:4px}
+.relay-actions .secondary{background:#647084}
+.push-overlay{position:fixed;inset:0;z-index:20000;background:#eef1f6;display:flex;align-items:center;justify-content:center;padding:20px}
+.push-box{max-width:560px;width:100%;background:#fff;border-radius:24px;padding:28px;text-align:center;box-shadow:0 12px 40px rgba(20,35,60,.18)}
+.push-box h2{font-size:28px}.push-box p{font-size:18px;font-weight:800;line-height:1.6}
+
 </style>
 <link rel="manifest" href="./manifest.webmanifest">
 <meta name="theme-color" content="#172033">
@@ -210,9 +222,28 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 <div class="sub">紙管・鉄リング・間紙・テープを自動計算</div>
 
 <div class="chatgpt-slip-box">
-  <div class="chatgpt-slip-note"><b>📷 iPadのChatGPTで伝票＋秤を撮影</b><br>この会話に写真を送信 → 返ってきた「風袋計算URL」をタップすると、この画面へ自動入力</div>
+  <div class="chatgpt-slip-note"><b>📷 携帯のChatGPTで伝票＋秤を撮影</b><br>写真を送信 → 返ってきた「iPadへ送る」をタップ → このiPadへ自動入力</div>
 </div>
 
+
+
+<section class="card relay-card" id="relayCard">
+<h2>📲 携帯 → iPad 自動受信</h2>
+<div id="relayStatus" class="relay-status">受信設定を確認中…</div>
+<div id="relaySetup" style="display:none">
+  <div class="hint">最初の1回だけ「受信コードを作る」を押します。そのコードを携帯のChatGPTに伝えると、以後は携帯から送った計算データがこのiPadに自動で入ります。</div>
+  <button id="makeRelayCode" type="button">受信コードを作る</button>
+</div>
+<div id="relayReady" style="display:none">
+  <div class="hint">このiPadの受信コード（携帯のChatGPTに1回だけ伝える）</div>
+  <div id="relayCode" class="relay-code"></div>
+  <div class="relay-actions">
+    <button id="copyRelayCode" type="button">コードをコピー</button>
+    <button id="resetRelayCode" type="button" class="secondary">コードを作り直す</button>
+  </div>
+  <div id="relayLast" class="hint">受信待機中</div>
+</div>
+</section>
 
 <section class="card">
 <h2>① 基本情報</h2>
@@ -1004,6 +1035,118 @@ document.addEventListener('DOMContentLoaded',()=>{
   } else {
     applyChatGPTParams();
   }
+})();
+</script>
+
+
+<script>
+/* ===== 携帯→iPad 無料データ中継 =====
+   受信: iPadはランダムな受信コードをlocalStorageに保存し、ntfy.shを約6秒ごとに確認。
+   送信: ChatGPTが ?push=受信コード|fill文字列 の1パラメータURLを返す。
+   例: ?push=ABC123%7Ct%3A0.2%2Cw%3A54%2Ckg%3A281
+*/
+(function(){
+  var ROOM_KEY='fuutaiRelayRoomV1';
+  var LAST_KEY='fuutaiRelayLastIdV1';
+  var BASE='https://ntfy.sh/';
+  var timer=null;
+
+  function qs(name){
+    try{return new URLSearchParams(window.location.search).get(name)||'';}catch(e){return '';}
+  }
+  function cleanRoom(v){return String(v||'').replace(/[^A-Za-z0-9_-]/g,'').slice(0,64);}
+  function topic(room){return 'fuutai-'+cleanRoom(room).toLowerCase();}
+  function makeCode(){
+    var a=new Uint8Array(16);
+    if(window.crypto&&window.crypto.getRandomValues){window.crypto.getRandomValues(a);}
+    else{for(var i=0;i<a.length;i++)a[i]=Math.floor(Math.random()*256);}
+    var out='';
+    for(var j=0;j<a.length;j++)out+=('0'+a[j].toString(16)).slice(-2);
+    return out.toUpperCase();
+  }
+  function setText(id,t){var e=document.getElementById(id);if(e)e.textContent=t;}
+  function show(id,on){var e=document.getElementById(id);if(e)e.style.display=on?'block':'none';}
+
+  function showPushOverlay(text,ok){
+    var ov=document.createElement('div');ov.className='push-overlay';
+    var box=document.createElement('div');box.className='push-box';
+    var h=document.createElement('h2');h.textContent=ok?'✅ iPadへ送信しました':'⚠️ 送信できませんでした';
+    var p=document.createElement('p');p.textContent=text;
+    box.appendChild(h);box.appendChild(p);ov.appendChild(box);document.body.appendChild(ov);
+  }
+
+  function sendToIpad(push){
+    var cut=push.indexOf('|');
+    if(cut<1){showPushOverlay('受信コードがありません。',false);return;}
+    var room=cleanRoom(push.slice(0,cut));
+    var fill=push.slice(cut+1);
+    if(!room||!fill){showPushOverlay('送信データが不足しています。',false);return;}
+    fetch(BASE+encodeURIComponent(topic(room)),{method:'POST',body:fill})
+      .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text();})
+      .then(function(){showPushOverlay('数秒以内にiPadの風袋計算へ自動入力されます。この画面は閉じてOKです。',true);})
+      .catch(function(){showPushOverlay('通信できませんでした。インターネット接続を確認して、もう一度リンクを押してください。',false);});
+  }
+
+  function applyReceived(fill,id){
+    try{localStorage.setItem(LAST_KEY,id||'');}catch(e){}
+    var base=window.location.href.split('?')[0].split('#')[0];
+    window.location.replace(base+'?fill='+encodeURIComponent(fill));
+  }
+
+  function poll(room){
+    if(!room)return;
+    var url=BASE+encodeURIComponent(topic(room))+'/json?poll=1&since=30s';
+    fetch(url,{cache:'no-store'})
+      .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text();})
+      .then(function(txt){
+        setText('relayStatus','🟢 携帯からのデータを受信待機中');
+        var lines=txt.split(/\r?\n/),last='';
+        try{last=localStorage.getItem(LAST_KEY)||'';}catch(e){}
+        var newest=null;
+        for(var i=0;i<lines.length;i++){
+          if(!lines[i].trim())continue;
+          try{var m=JSON.parse(lines[i]);if(m.event==='message'&&m.id!==last&&m.message)newest=m;}catch(e){}
+        }
+        if(newest){
+          setText('relayLast','受信しました。計算画面へ反映します…');
+          applyReceived(newest.message,newest.id);
+        }
+      })
+      .catch(function(){setText('relayStatus','🟠 受信確認中（通信待ち）');});
+  }
+
+  function start(room){
+    if(timer)clearInterval(timer);
+    poll(room);
+    timer=setInterval(function(){poll(room);},6000);
+  }
+
+  function render(){
+    var room='';try{room=localStorage.getItem(ROOM_KEY)||'';}catch(e){}
+    if(!room){
+      setText('relayStatus','iPadの受信設定はまだです');show('relaySetup',true);show('relayReady',false);
+      return;
+    }
+    setText('relayStatus','🟢 携帯からのデータを受信待機中');setText('relayCode',room);
+    show('relaySetup',false);show('relayReady',true);start(room);
+  }
+
+  document.addEventListener('DOMContentLoaded',function(){
+    var push=qs('push');
+    if(push){sendToIpad(push);return;}
+    var make=document.getElementById('makeRelayCode');
+    var reset=document.getElementById('resetRelayCode');
+    var copy=document.getElementById('copyRelayCode');
+    if(make)make.addEventListener('click',function(){var c=makeCode();try{localStorage.setItem(ROOM_KEY,c);localStorage.removeItem(LAST_KEY);}catch(e){}render();});
+    if(reset)reset.addEventListener('click',function(){if(!window.confirm('受信コードを作り直しますか？ 携帯のChatGPTにも新しいコードを伝え直す必要があります。'))return;var c=makeCode();try{localStorage.setItem(ROOM_KEY,c);localStorage.removeItem(LAST_KEY);}catch(e){}render();});
+    if(copy)copy.addEventListener('click',function(){
+      var e=document.getElementById('relayCode');if(!e)return;
+      var range=document.createRange();range.selectNodeContents(e);var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+      var ok=false;try{ok=document.execCommand('copy');}catch(err){}
+      setText('relayLast',ok?'受信コードをコピーしました。携帯のChatGPTへ貼り付けてください。':'コードを長押ししてコピーしてください。');
+    });
+    render();
+  });
 })();
 </script>
 
