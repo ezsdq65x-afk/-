@@ -990,8 +990,12 @@ document.addEventListener('DOMContentLoaded',()=>{
     const inner = p.get("inner") || p.get("diameter") || p.get("dia");
     if (inner) {
       const dia = document.getElementById("diameter");
-      if (dia && [...dia.options].some(o => o.value === String(inner))) {
-        dia.value = String(inner);
+      if (dia) {
+        var innerOk = false;
+        for (var oi = 0; oi < dia.options.length; oi++) {
+          if (dia.options[oi].value === String(inner)) { innerOk = true; break; }
+        }
+        if (innerOk) dia.value = String(inner);
       }
     }
 
@@ -1016,8 +1020,12 @@ document.addEventListener('DOMContentLoaded',()=>{
     // updateTube後にも内径を再反映
     if (inner) {
       const dia = document.getElementById("diameter");
-      if (dia && [...dia.options].some(o => o.value === String(inner))) {
-        dia.value = String(inner);
+      if (dia) {
+        var innerOk = false;
+        for (var oi = 0; oi < dia.options.length; oi++) {
+          if (dia.options[oi].value === String(inner)) { innerOk = true; break; }
+        }
+        if (innerOk) dia.value = String(inner);
       }
     }
 
