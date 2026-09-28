@@ -1040,28 +1040,39 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 
 <script>
-/* ===== 携帯→iPad 無料データ中継 =====
-   受信: iPadはランダムな受信コードをlocalStorageに保存し、ntfy.shを約6秒ごとに確認。
-   送信: ChatGPTが ?push=受信コード|fill文字列 の1パラメータURLを返す。
-   例: ?push=ABC123%7Ct%3A0.2%2Cw%3A54%2Ckg%3A281
+/* ===== 携帯→iPad 無料データ中継 / iOS 12対応版 =====
+   iPad側は fetch を使わず EventSource(SSE) で常時受信。
+   SSEが使えない場合は XMLHttpRequest の短時間ポーリングへ自動切替。
+   既存の受信コードは localStorage に残るため作り直し不要。
 */
 (function(){
   var ROOM_KEY='fuutaiRelayRoomV1';
   var LAST_KEY='fuutaiRelayLastIdV1';
   var BASE='https://ntfy.sh/';
-  var timer=null;
+  var es=null, timer=null, xhrBusy=false;
 
   function qs(name){
-    try{return new URLSearchParams(window.location.search).get(name)||'';}catch(e){return '';}
+    var q=window.location.search.replace(/^\?/,'').split('&');
+    for(var i=0;i<q.length;i++){
+      var a=q[i].split('=');
+      if(decodeURIComponent(a[0]||'')===name){
+        try{return decodeURIComponent((a.slice(1).join('=')||'').replace(/\+/g,' '));}catch(e){return '';}
+      }
+    }
+    return '';
   }
   function cleanRoom(v){return String(v||'').replace(/[^A-Za-z0-9_-]/g,'').slice(0,64);}
   function topic(room){return 'fuutai-'+cleanRoom(room).toLowerCase();}
   function makeCode(){
-    var a=new Uint8Array(16);
-    if(window.crypto&&window.crypto.getRandomValues){window.crypto.getRandomValues(a);}
-    else{for(var i=0;i<a.length;i++)a[i]=Math.floor(Math.random()*256);}
-    var out='';
-    for(var j=0;j<a.length;j++)out+=('0'+a[j].toString(16)).slice(-2);
+    var out='',i,n;
+    try{
+      if(window.crypto&&window.crypto.getRandomValues){
+        var a=new Uint8Array(16);window.crypto.getRandomValues(a);
+        for(i=0;i<a.length;i++)out+=('0'+a[i].toString(16)).slice(-2);
+        return out.toUpperCase();
+      }
+    }catch(e){}
+    for(i=0;i<32;i++){n=Math.floor(Math.random()*16);out+=n.toString(16);}
     return out.toUpperCase();
   }
   function setText(id,t){var e=document.getElementById(id);if(e)e.textContent=t;}
@@ -1081,51 +1092,97 @@ document.addEventListener('DOMContentLoaded',()=>{
     var room=cleanRoom(push.slice(0,cut));
     var fill=push.slice(cut+1);
     if(!room||!fill){showPushOverlay('送信データが不足しています。',false);return;}
-    fetch(BASE+encodeURIComponent(topic(room)),{method:'POST',body:fill})
-      .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text();})
-      .then(function(){showPushOverlay('数秒以内にiPadの風袋計算へ自動入力されます。この画面は閉じてOKです。',true);})
-      .catch(function(){showPushOverlay('通信できませんでした。インターネット接続を確認して、もう一度リンクを押してください。',false);});
+    var x=new XMLHttpRequest();
+    x.open('POST',BASE+encodeURIComponent(topic(room)),true);
+    x.setRequestHeader('Content-Type','text/plain;charset=UTF-8');
+    x.timeout=15000;
+    x.onreadystatechange=function(){
+      if(x.readyState!==4)return;
+      if(x.status>=200&&x.status<300)showPushOverlay('数秒以内にiPadの風袋計算へ自動入力されます。この画面は閉じてOKです。',true);
+      else showPushOverlay('通信できませんでした。インターネット接続を確認して、もう一度リンクを押してください。',false);
+    };
+    x.onerror=function(){showPushOverlay('通信できませんでした。インターネット接続を確認して、もう一度リンクを押してください。',false);};
+    x.ontimeout=x.onerror;
+    try{x.send(fill);}catch(e){x.onerror();}
   }
 
   function applyReceived(fill,id){
+    if(!fill)return;
     try{localStorage.setItem(LAST_KEY,id||'');}catch(e){}
+    setText('relayLast','受信しました。計算画面へ反映します…');
     var base=window.location.href.split('?')[0].split('#')[0];
     window.location.replace(base+'?fill='+encodeURIComponent(fill));
   }
 
-  function poll(room){
-    if(!room)return;
-    var url=BASE+encodeURIComponent(topic(room))+'/json?poll=1&since=30s';
-    fetch(url,{cache:'no-store'})
-      .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text();})
-      .then(function(txt){
+  function handleMessage(m){
+    if(!m||m.event!=='message'||!m.message)return;
+    var last='';try{last=localStorage.getItem(LAST_KEY)||'';}catch(e){}
+    if(m.id&&m.id===last)return;
+    applyReceived(m.message,m.id||'');
+  }
+
+  function startSSE(room){
+    if(!window.EventSource)return false;
+    try{
+      if(es){try{es.close();}catch(e){}}
+      var url=BASE+encodeURIComponent(topic(room))+'/sse?since=latest&_='+(new Date().getTime());
+      es=new EventSource(url);
+      es.onopen=function(){
         setText('relayStatus','🟢 携帯からのデータを受信待機中');
-        var lines=txt.split(/\r?\n/),last='';
-        try{last=localStorage.getItem(LAST_KEY)||'';}catch(e){}
-        var newest=null;
+        setText('relayLast','受信待機中（iOS 12対応）');
+      };
+      es.onmessage=function(ev){
+        try{handleMessage(JSON.parse(ev.data));}catch(e){}
+      };
+      es.onerror=function(){
+        setText('relayStatus','🟡 再接続中…');
+      };
+      return true;
+    }catch(e){return false;}
+  }
+
+  function xhrPoll(room){
+    if(xhrBusy)return;
+    xhrBusy=true;
+    var last='';try{last=localStorage.getItem(LAST_KEY)||'';}catch(e){}
+    var since=last?encodeURIComponent(last):'30s';
+    var url=BASE+encodeURIComponent(topic(room))+'/json?poll=1&since='+since+'&_='+(new Date().getTime());
+    var x=new XMLHttpRequest();
+    x.open('GET',url,true);x.timeout=12000;
+    x.onreadystatechange=function(){
+      if(x.readyState!==4)return;
+      xhrBusy=false;
+      if(x.status>=200&&x.status<300){
+        setText('relayStatus','🟢 携帯からのデータを受信待機中');
+        var lines=(x.responseText||'').split(/\r?\n/), newest=null;
         for(var i=0;i<lines.length;i++){
-          if(!lines[i].trim())continue;
-          try{var m=JSON.parse(lines[i]);if(m.event==='message'&&m.id!==last&&m.message)newest=m;}catch(e){}
+          if(!lines[i].replace(/\s/g,''))continue;
+          try{var m=JSON.parse(lines[i]);if(m.event==='message'&&m.message)newest=m;}catch(e){}
         }
-        if(newest){
-          setText('relayLast','受信しました。計算画面へ反映します…');
-          applyReceived(newest.message,newest.id);
-        }
-      })
-      .catch(function(){setText('relayStatus','🟠 受信確認中（通信待ち）');});
+        if(newest)handleMessage(newest);
+      }else setText('relayStatus','🟠 受信確認中（通信待ち）');
+    };
+    x.onerror=function(){xhrBusy=false;setText('relayStatus','🟠 受信確認中（通信待ち）');};
+    x.ontimeout=x.onerror;
+    try{x.send(null);}catch(e){x.onerror();}
   }
 
   function start(room){
-    if(timer)clearInterval(timer);
-    poll(room);
-    timer=setInterval(function(){poll(room);},6000);
+    if(timer){clearInterval(timer);timer=null;}
+    if(es){try{es.close();}catch(e){}es=null;}
+    if(startSSE(room)){
+      /* SSEを主経路にしつつ、30秒ごとのXHRを保険にする */
+      timer=setInterval(function(){xhrPoll(room);},30000);
+    }else{
+      xhrPoll(room);
+      timer=setInterval(function(){xhrPoll(room);},6000);
+    }
   }
 
   function render(){
     var room='';try{room=localStorage.getItem(ROOM_KEY)||'';}catch(e){}
     if(!room){
-      setText('relayStatus','iPadの受信設定はまだです');show('relaySetup',true);show('relayReady',false);
-      return;
+      setText('relayStatus','iPadの受信設定はまだです');show('relaySetup',true);show('relayReady',false);return;
     }
     setText('relayStatus','🟢 携帯からのデータを受信待機中');setText('relayCode',room);
     show('relaySetup',false);show('relayReady',true);start(room);
