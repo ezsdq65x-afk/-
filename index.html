@@ -875,6 +875,101 @@ document.addEventListener('DOMContentLoaded',()=>{
  refreshAllChoiceButtons();
 });
 </script>
+
+<script>
+/* ===== ChatGPT URL自動入力 =====
+   例:
+   ?thickness=0.5&width=398&inner=500&coreType=hard&paper=none&tape=SPE&fno=60-766-20
+*/
+(function(){
+  function applyChatGPTParams(){
+    const p = new URLSearchParams(window.location.search);
+    if (![...p.keys()].length) return;
+
+    const setValue = (id, value) => {
+      if (value === null || value === undefined || value === "") return;
+      const el = document.getElementById(id);
+      if (el) el.value = value;
+    };
+
+    // 基本情報
+    setValue("fno", p.get("fno"));
+    setValue("coilNo", p.get("coilNo") || p.get("coil"));
+    setValue("thickness", p.get("thickness") || p.get("t"));
+    setValue("width1", p.get("width") || p.get("width1") || p.get("w"));
+    setValue("width2", p.get("width2") || p.get("w2"));
+
+    // 総重量がURLにある場合だけ入れる（通常は現場で手入力）
+    setValue("totalKg1", p.get("totalKg") || p.get("totalKg1") || p.get("weight"));
+    setValue("totalKg2", p.get("totalKg2") || p.get("weight2"));
+
+    // 紙管・鉄リング
+    let tube = p.get("coreType") || p.get("tubeType") || "";
+    const core = (p.get("core") || "").toUpperCase();
+
+    // coreType が無い場合だけ P/T から補助判定
+    if (!tube) {
+      if (core === "T") tube = "ring";
+      else if (core === "P") tube = "hard"; // 伝票ルール上、P＋高強度指定を主に使用
+    }
+
+    const allowedTube = ["none","normal","normal10","hard","hard10","hard15","ring"];
+    if (allowedTube.includes(tube)) {
+      setValue("tubeType", tube);
+      if (typeof updateTube === "function") updateTube();
+    }
+
+    const inner = p.get("inner") || p.get("diameter") || p.get("dia");
+    if (inner) {
+      const dia = document.getElementById("diameter");
+      if (dia && [...dia.options].some(o => o.value === String(inner))) {
+        dia.value = String(inner);
+      }
+    }
+
+    // 間紙
+    let paper = (p.get("paper") || "").toLowerCase();
+    if (["none","no","0","x","×"].includes(paper)) paper = "none";
+    if (["use","yes","1","paper"].includes(paper)) paper = "use";
+    if (paper === "none" || paper === "use") {
+      setValue("paperUse", paper);
+    }
+
+    // テープ
+    let tape = (p.get("tape") || "").toUpperCase();
+    if (["NONE","NO","0","×"].includes(tape)) tape = "none";
+    if (["SPV","SPH","SPE","none"].includes(tape)) {
+      setValue("tapeType", tape);
+    }
+
+    if (typeof syncPaperTape === "function") syncPaperTape();
+    if (typeof updateTube === "function") updateTube();
+
+    // updateTube後にも内径を再反映
+    if (inner) {
+      const dia = document.getElementById("diameter");
+      if (dia && [...dia.options].some(o => o.value === String(inner))) {
+        dia.value = String(inner);
+      }
+    }
+
+    if (typeof refreshAllChoiceButtons === "function") refreshAllChoiceButtons();
+
+    const msg = document.getElementById("message");
+    if (msg) {
+      msg.textContent = "チャッピーで読み取った伝票データを入力しました。総重量を入力して計算してください。";
+      msg.className = "ok";
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", applyChatGPTParams);
+  } else {
+    applyChatGPTParams();
+  }
+})();
+</script>
+
 <script>
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", function () {
