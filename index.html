@@ -205,6 +205,7 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
 .relay-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .relay-actions button{font-size:16px;padding:12px;margin-top:4px}
 .relay-actions .secondary{background:#647084}
+.relay-actions .reconnect{grid-column:1/-1;background:#1877d2;font-size:18px;font-weight:900}
 .push-overlay{position:fixed;inset:0;z-index:20000;background:#eef1f6;display:flex;align-items:center;justify-content:center;padding:20px}
 .push-box{max-width:560px;width:100%;background:#fff;border-radius:24px;padding:28px;text-align:center;box-shadow:0 12px 40px rgba(20,35,60,.18)}
 .push-box h2{font-size:28px}.push-box p{font-size:18px;font-weight:800;line-height:1.6}
@@ -240,6 +241,7 @@ button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900
   <div class="relay-actions">
     <button id="copyRelayCode" type="button">コードをコピー</button>
     <button id="resetRelayCode" type="button" class="secondary">コードを作り直す</button>
+    <button id="reconnectRelay" type="button" class="reconnect">🔄 受信を再接続</button>
   </div>
   <div id="relayLast" class="hint">受信待機中</div>
 </div>
@@ -990,12 +992,8 @@ document.addEventListener('DOMContentLoaded',()=>{
     const inner = p.get("inner") || p.get("diameter") || p.get("dia");
     if (inner) {
       const dia = document.getElementById("diameter");
-      if (dia) {
-        var innerOk = false;
-        for (var oi = 0; oi < dia.options.length; oi++) {
-          if (dia.options[oi].value === String(inner)) { innerOk = true; break; }
-        }
-        if (innerOk) dia.value = String(inner);
+      if (dia && [...dia.options].some(o => o.value === String(inner))) {
+        dia.value = String(inner);
       }
     }
 
@@ -1020,12 +1018,8 @@ document.addEventListener('DOMContentLoaded',()=>{
     // updateTube後にも内径を再反映
     if (inner) {
       const dia = document.getElementById("diameter");
-      if (dia) {
-        var innerOk = false;
-        for (var oi = 0; oi < dia.options.length; oi++) {
-          if (dia.options[oi].value === String(inner)) { innerOk = true; break; }
-        }
-        if (innerOk) dia.value = String(inner);
+      if (dia && [...dia.options].some(o => o.value === String(inner))) {
+        dia.value = String(inner);
       }
     }
 
@@ -1057,7 +1051,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   var ROOM_KEY='fuutaiRelayRoomV1';
   var LAST_KEY='fuutaiRelayLastIdV1';
   var BASE='https://ntfy.sh/';
-  var es=null, timer=null, xhrBusy=false;
+  var es=null, timer=null, reconnectTimer=null, xhrBusy=false;
 
   function qs(name){
     var q=window.location.search.replace(/^\?/,'').split('&');
@@ -1144,6 +1138,14 @@ document.addEventListener('DOMContentLoaded',()=>{
       };
       es.onerror=function(){
         setText('relayStatus','🟡 再接続中…');
+        /* 古いiOSのホーム画面版ではSSEの自動復帰が止まることがあるため明示的に再接続 */
+        if(!reconnectTimer){
+          reconnectTimer=setTimeout(function(){
+            reconnectTimer=null;
+            start(room);
+            xhrPoll(room);
+          },5000);
+        }
       };
       return true;
     }catch(e){return false;}
@@ -1177,14 +1179,25 @@ document.addEventListener('DOMContentLoaded',()=>{
 
   function start(room){
     if(timer){clearInterval(timer);timer=null;}
+    if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null;}
     if(es){try{es.close();}catch(e){}es=null;}
     if(startSSE(room)){
-      /* SSEを主経路にしつつ、30秒ごとのXHRを保険にする */
-      timer=setInterval(function(){xhrPoll(room);},30000);
+      /* SSEを主経路にしつつ、10秒ごとのXHRでも取りこぼしを確認 */
+      xhrPoll(room);
+      timer=setInterval(function(){xhrPoll(room);},10000);
     }else{
       xhrPoll(room);
       timer=setInterval(function(){xhrPoll(room);},6000);
     }
+  }
+
+  function reconnectNow(){
+    var room='';try{room=localStorage.getItem(ROOM_KEY)||'';}catch(e){}
+    if(!room){setText('relayStatus','iPadの受信設定はまだです');return;}
+    setText('relayStatus','🔄 受信を再接続しています…');
+    setText('relayLast','通信を確認中…');
+    start(room);
+    xhrPoll(room);
   }
 
   function render(){
@@ -1202,8 +1215,10 @@ document.addEventListener('DOMContentLoaded',()=>{
     var make=document.getElementById('makeRelayCode');
     var reset=document.getElementById('resetRelayCode');
     var copy=document.getElementById('copyRelayCode');
+    var reconnect=document.getElementById('reconnectRelay');
     if(make)make.addEventListener('click',function(){var c=makeCode();try{localStorage.setItem(ROOM_KEY,c);localStorage.removeItem(LAST_KEY);}catch(e){}render();});
     if(reset)reset.addEventListener('click',function(){if(!window.confirm('受信コードを作り直しますか？ 携帯のChatGPTにも新しいコードを伝え直す必要があります。'))return;var c=makeCode();try{localStorage.setItem(ROOM_KEY,c);localStorage.removeItem(LAST_KEY);}catch(e){}render();});
+    if(reconnect)reconnect.addEventListener('click',function(){reconnectNow();});
     if(copy)copy.addEventListener('click',function(){
       var e=document.getElementById('relayCode');if(!e)return;
       var range=document.createRange();range.selectNodeContents(e);var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
@@ -1211,6 +1226,13 @@ document.addEventListener('DOMContentLoaded',()=>{
       setText('relayLast',ok?'受信コードをコピーしました。携帯のChatGPTへ貼り付けてください。':'コードを長押ししてコピーしてください。');
     });
     render();
+
+    /* ホーム画面へ戻った時・通信復帰時も自動で受信を立て直す */
+    window.addEventListener('online',function(){reconnectNow();});
+    window.addEventListener('pageshow',function(){reconnectNow();});
+    document.addEventListener('visibilitychange',function(){
+      if(!document.hidden)reconnectNow();
+    });
   });
 })();
 </script>
