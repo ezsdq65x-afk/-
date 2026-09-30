@@ -1,0 +1,1266 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#172033">
+<title>風袋計算</title>
+<!-- offline-v11: ①結果を10秒表示→②幅から開始 -->
+<style>
+:root{--bg:#eef1f6;--card:#fff;--ink:#172033;--muted:#647084;--line:#dce2eb;--accent:#172033}
+*{box-sizing:border-box}
+html,body,button,input,select,.key{
+  touch-action:manipulation;
+}
+button,.key{
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-tap-highlight-color:transparent;
+}
+body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;color:var(--ink)}
+main{max-width:760px;margin:auto;padding:18px 14px 48px}
+.title{font-size:30px;font-weight:900;margin:8px 0 4px}.sub{color:var(--muted);font-weight:700;margin-bottom:18px}
+.card{background:var(--card);border-radius:24px;padding:20px;margin:14px 0;box-shadow:0 8px 24px rgba(20,35,60,.08)}
+h2{margin:0 0 16px;font-size:24px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:520px){.grid{grid-template-columns:1fr}}
+label{display:block;font-weight:800;font-size:15px;margin:0 0 6px}
+input,select,button{width:100%;font:inherit;border-radius:14px}
+input,select{padding:14px;border:2px solid var(--line);background:#fff;color:var(--ink);font-weight:700}
+button{padding:18px;border:0;background:var(--accent);color:#fff;font-weight:900;font-size:22px;margin-top:10px}
+.hint{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.55}
+.results .row{display:flex;justify-content:space-between;gap:10px;padding:17px 0;border-bottom:1px solid var(--line);font-size:20px;font-weight:800}
+.results .row b{font-size:30px;white-space:nowrap}
+.total{margin-top:18px;padding:18px;border-radius:22px;background:#e9eef8}
+.total small{display:block;font-weight:800}.total b{font-size:46px}
+.err{color:#b42318;font-weight:800;margin-top:12px;white-space:pre-line}
+.ok{color:#1a6d40;font-weight:800;margin-top:12px;white-space:pre-line}
+
+/* ===== 大きめ10キー入力 UI ===== */
+.num-field{
+  cursor:pointer;
+  font-size:22px;
+  min-height:58px;
+  caret-color:transparent;
+}
+#totalKg1,#totalKg2{
+  border-color:#2f80ed;
+  background:#eef6ff;
+}
+#width1,#width2{
+  border-color:#27ae60;
+  background:#effaf3;
+}
+#thickness{
+  border-color:#f2994a;
+  background:#fff6ec;
+}
+#calc{
+  background:#7b2cbf;
+  box-shadow:0 8px 18px rgba(123,44,191,.22);
+}
+#calc:active{transform:translateY(1px)}
+
+.keypad-backdrop{
+  position:fixed;
+  inset:0;
+  background:rgba(15,23,42,.38);
+  z-index:9998;
+  display:none;
+}
+.keypad{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:0;
+  z-index:9999;
+  background:#eef1f6;
+  border-radius:26px 26px 0 0;
+  box-shadow:0 -12px 30px rgba(20,35,60,.18);
+  padding:14px 14px max(18px,env(safe-area-inset-bottom));
+  display:none;
+}
+.keypad.open,.keypad-backdrop.open{display:block}
+.keypad-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:0 auto 12px;
+  max-width:520px;
+}
+.keypad-title{
+  font-size:18px;
+  font-weight:900;
+}
+.keypad-value{
+  font-size:28px;
+  font-weight:900;
+  background:#fff;
+  border-radius:14px;
+  padding:8px 14px;
+  min-width:130px;
+  text-align:right;
+  border:2px solid #dce2eb;
+}
+.keypad-grid{
+  max-width:520px;
+  margin:auto;
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+}
+.key{
+  min-height:68px;
+  margin:0;
+  padding:8px;
+  border-radius:16px;
+  background:#fff;
+  color:#172033;
+  font-size:30px;
+  font-weight:900;
+  border:1px solid #d7dde7;
+  box-shadow:0 2px 5px rgba(20,35,60,.08);
+}
+.key:active{background:#dde5f1}
+.key.action{font-size:22px;background:#dfe5ed}
+.key.done{
+  grid-column:1 / -1;
+  min-height:58px;
+  background:#172033;
+  color:#fff;
+  font-size:22px;
+}
+
+
+.dual-inputs,.dual-results{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  margin-top:12px;
+}
+.dual-box{
+  border:2px solid #e3e8f0;
+  border-radius:18px;
+  padding:14px;
+  background:#fafcff;
+}
+.dual-box.left{background:#f2f8ff;border-color:#b9d8ff}
+.dual-box.right{background:#faf4ff;border-color:#dcc7ff}
+.dual-title{font-size:18px;font-weight:900;margin-bottom:10px}
+.dual-box.left .dual-title{color:#2463eb}
+.dual-box.right .dual-title{color:#7b2cbf}
+.result-mini{border-radius:18px;padding:14px;background:#fff}
+.result-mini .row{font-size:16px;padding:10px 0}
+.result-mini .row b{font-size:20px}
+.result-mini .total{margin-top:10px;padding:12px}
+.result-mini .total b{font-size:30px}
+@media(max-width:560px){
+  .dual-inputs,.dual-results{grid-template-columns:1fr 1fr;gap:8px}
+  .dual-box{padding:10px}
+  .dual-title{font-size:16px}
+}
+
+
+/* ===== iPhone用 紙管・鉄リング 自動選択パネル ===== */
+.quick-picker-backdrop{
+  position:fixed; inset:0; background:rgba(15,23,42,.42);
+  z-index:10020; display:none;
+}
+.quick-picker{
+  position:fixed; left:10px; right:10px; bottom:10px;
+  z-index:10021; display:none;
+  background:#fff; border-radius:22px;
+  box-shadow:0 -10px 30px rgba(0,0,0,.18);
+  padding:14px max(14px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));
+}
+.quick-picker.open,.quick-picker-backdrop.open{display:block}
+.quick-picker h3{margin:2px 0 12px;font-size:20px}
+.quick-picker-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.quick-picker button{
+  margin:0; padding:15px 10px; min-height:54px;
+  border-radius:14px; font-size:17px; background:#eef4ff; color:#172033;
+  border:2px solid #cfe0ff;
+}
+.quick-picker button[data-value="ring"]{background:#fff3e8;border-color:#ffd4a8}
+.quick-picker button[data-value="none"]{background:#f2f2f2;border-color:#ddd}
+
+
+.choice-group{display:grid;gap:10px;margin-top:10px}.choice-group.two{grid-template-columns:repeat(2,1fr)}.choice-group.three{grid-template-columns:repeat(3,1fr)}.choice-group.four,.choice-group.tube{grid-template-columns:repeat(2,1fr)}
+.choice-btn{margin:0;min-height:54px;padding:12px 8px;border-radius:14px;border:2px solid #d8dee8;background:#fff;color:#172033;font-size:17px;font-weight:900}
+.choice-btn.selected{background:#e8f1ff;border-color:#2f80ed;color:#154aa8}.choice-btn.orange.selected{background:#fff1e6;border-color:#f2994a}.choice-btn.green.selected{background:#eaf8ef;border-color:#27ae60}.choice-btn.purple.selected{background:#f3eaff;border-color:#7b2cbf}
+.native-select-hidden{position:absolute!important;opacity:0!important;pointer-events:none!important;width:1px!important;height:1px!important}
+
+/* ===== ChatGPT伝票読取ボタン ===== */
+.chatgpt-slip-box{margin:18px 0 16px;padding:14px;border-radius:18px;background:#eefbf6;border:2px solid #24a06b;text-align:center}
+.chatgpt-slip-btn{display:block;width:100%;box-sizing:border-box;padding:17px 12px;border-radius:15px;background:#111827;color:#fff!important;text-decoration:none;font-size:21px;font-weight:900;box-shadow:0 7px 16px rgba(17,24,39,.18)}
+.chatgpt-slip-btn:active{transform:translateY(1px)}
+.chatgpt-slip-note{margin-top:9px;font-size:14px;line-height:1.55;color:#475569;font-weight:700}
+
+
+/* ===== 携帯→iPad 自動受信 ===== */
+.relay-card{border:3px solid #2f80ed;background:#f5f9ff}
+.relay-status{font-size:18px;font-weight:900;margin:8px 0}
+.relay-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:16px;word-break:break-all;background:#fff;border:2px dashed #2f80ed;border-radius:12px;padding:12px;margin:10px 0;user-select:all;-webkit-user-select:all}
+.relay-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.relay-actions button{font-size:16px;padding:12px;margin-top:4px}
+.relay-actions .secondary{background:#647084}
+.relay-actions .reconnect{grid-column:1/-1;background:#1877d2;font-size:18px;font-weight:900}
+.push-overlay{position:fixed;inset:0;z-index:20000;background:#eef1f6;display:flex;align-items:center;justify-content:center;padding:20px}
+.push-box{max-width:560px;width:100%;background:#fff;border-radius:24px;padding:28px;text-align:center;box-shadow:0 12px 40px rgba(20,35,60,.18)}
+.push-box h2{font-size:28px}.push-box p{font-size:18px;font-weight:800;line-height:1.6}
+
+</style>
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#172033">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="風袋計算">
+</head>
+<body>
+<main>
+<div class="title">風袋計算</div>
+<div class="sub">紙管・鉄リング・間紙・テープを自動計算</div>
+
+<div class="chatgpt-slip-box">
+  <div class="chatgpt-slip-note"><b>📷 携帯のChatGPTで伝票＋秤を撮影</b><br>写真を送信 → 返ってきた「iPadへ送る」をタップ → このiPadへ自動入力</div>
+</div>
+
+
+
+<section class="card relay-card" id="relayCard">
+<h2>📲 携帯 → iPad 自動受信</h2>
+<div id="relayStatus" class="relay-status">受信設定を確認中…</div>
+<div id="relaySetup" style="display:none">
+  <div class="hint">最初の1回だけ「受信コードを作る」を押します。そのコードを携帯のChatGPTに伝えると、以後は携帯から送った計算データがこのiPadに自動で入ります。</div>
+  <button id="makeRelayCode" type="button">受信コードを作る</button>
+</div>
+<div id="relayReady" style="display:none">
+  <div class="hint">このiPadの受信コード（携帯のChatGPTに1回だけ伝える）</div>
+  <div id="relayCode" class="relay-code"></div>
+  <div class="relay-actions">
+    <button id="copyRelayCode" type="button">コードをコピー</button>
+    <button id="resetRelayCode" type="button" class="secondary">コードを作り直す</button>
+    <button id="reconnectRelay" type="button" class="reconnect">🔄 受信を再接続</button>
+  </div>
+  <div id="relayLast" class="hint">受信待機中</div>
+</div>
+</section>
+
+<section class="card">
+<h2>① 基本情報</h2>
+<div class="grid">
+<div><label>FNo</label><input id="fno" type="text" placeholder="任意"></div>
+<div><label>コイルNo</label><input id="coilNo" type="text" placeholder="任意"></div>
+</div>
+
+<div style="margin-top:12px">
+<label>製品厚み（mm）※共通</label>
+<input id="thickness" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力">
+</div>
+
+<div class="dual-inputs">
+  <div class="dual-box left">
+    <div class="dual-title">① 左側</div>
+    <label>製品幅①（mm）</label>
+    <input id="width1" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力">
+    <label style="margin-top:10px">総重量①（kg）</label>
+    <input id="totalKg1" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力">
+  </div>
+
+  <div class="dual-box right">
+    <div class="dual-title">② 右側</div>
+    <label>製品幅②（mm）</label>
+    <input id="width2" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力">
+    <label style="margin-top:10px">総重量②（kg）</label>
+    <input id="totalKg2" class="num-field" type="text" inputmode="none" readonly placeholder="タップして入力">
+  </div>
+</div>
+
+<div class="hint">入力順：① 幅→総重量→紙管・鉄リング→間紙→計算。①の計算後、②も 幅→総重量→紙管・鉄リング→間紙→計算 の同じ流れです。</div>
+</section>
+
+<section class="card">
+<h2>② 紙管・鉄リング</h2>
+<div class="grid">
+<div><label>種類</label><select id="tubeType" class="native-select-hidden">
+<option value="none">なし</option>
+<option value="normal">普通紙管</option>
+<option value="normal10">普通紙管 10mm</option>
+<option value="hard">硬強度紙管</option>
+<option value="hard10">硬強度紙管 10mm</option>
+<option value="hard15">硬強度紙管 15mm</option>
+<option value="ring">鉄リング</option>
+</select><div id="tubeButtons" class="choice-group tube">
+<button type="button" class="choice-btn" data-target="tubeType" data-value="none">なし</button>
+<button type="button" class="choice-btn" data-target="tubeType" data-value="normal">普通紙管</button>
+<button type="button" class="choice-btn" data-target="tubeType" data-value="normal10">普通紙管 10mm</button>
+<button type="button" class="choice-btn" data-target="tubeType" data-value="hard">硬強度紙管</button>
+<button type="button" class="choice-btn" data-target="tubeType" data-value="hard10">硬強度紙管 10mm</button>
+<button type="button" class="choice-btn" data-target="tubeType" data-value="hard15">硬強度紙管 15mm</button>
+<button type="button" class="choice-btn orange" data-target="tubeType" data-value="ring">鉄リング</button></div></div>
+<div><label>内径</label><select id="diameter" class="native-select-hidden">
+<option value="300">φ300</option>
+<option value="400">φ400</option>
+<option value="500" selected>φ500</option>
+</select><div id="diameterButtons" class="choice-group three">
+<button type="button" class="choice-btn green" data-target="diameter" data-value="300">φ300</button>
+<button type="button" class="choice-btn green" data-target="diameter" data-value="400">φ400</button>
+<button type="button" class="choice-btn green" data-target="diameter" data-value="500">φ500</button></div></div>
+</div>
+<div id="tubeHint" class="hint"></div><div class="hint">※写真の比重表にある組み合わせだけ選択できます。</div>
+</section>
+
+<section class="card">
+<h2>③ 間紙</h2>
+<label>紙の有無</label>
+<select id="paperUse" class="native-select-hidden">
+<option value="" selected disabled>選択してください</option>
+<option value="none">紙なし</option>
+<option value="use">紙入り</option>
+</select><div id="paperButtons" class="choice-group two">
+<button type="button" class="choice-btn purple" data-target="paperUse" data-value="none">紙なし</button>
+<button type="button" class="choice-btn purple" data-target="paperUse" data-value="use">紙入り</button></div>
+<div class="hint">紙入りなら、製品厚み＋総重量から間紙換算質量表を使って自動計算します。※間紙ありの時はテープは自動で「なし」になります。</div>
+</section>
+
+<section class="card">
+<h2>④ テープ</h2>
+<label>テープ種類</label>
+<select id="tapeType" class="native-select-hidden">
+<option value="" selected disabled>選択してください</option>
+<option value="none">なし</option>
+<option value="SPV">SPV</option>
+<option value="SPH">SPH</option>
+<option value="SPE">SPE</option>
+</select><div id="tapeButtons" class="choice-group four">
+<button type="button" class="choice-btn" data-target="tapeType" data-value="none">なし</button>
+<button type="button" class="choice-btn" data-target="tapeType" data-value="SPV">SPV</button>
+<button type="button" class="choice-btn" data-target="tapeType" data-value="SPH">SPH</button>
+<button type="button" class="choice-btn" data-target="tapeType" data-value="SPE">SPE</button></div>
+<div class="hint">テープも製品厚み＋総重量から、選択したSPV・SPH・SPEの換算表で自動計算します。※間紙ありの時はテープ入力をスキップします。</div>
+</section>
+
+<section class="card results">
+<h2>計算結果</h2>
+<div class="dual-results">
+  <div class="result-mini dual-box left">
+    <div class="dual-title">① 左側の結果</div>
+    <div class="row"><span>紙管・鉄リング</span><b id="tubeResult1">0 kg (0.00 kg)</b></div>
+    <div class="row"><span>間紙</span><b id="paperResult1">0 kg (0.00 kg)</b></div>
+    <div class="row"><span>テープ</span><b id="tapeResult1">0 kg (0.00 kg)</b></div>
+    <div class="total"><small>合計控除重量①</small><b id="deductResult1">0 kg (0.00 kg)</b></div>
+  </div>
+
+  <div class="result-mini dual-box right">
+    <div class="dual-title">② 右側の結果</div>
+    <div class="row"><span>紙管・鉄リング</span><b id="tubeResult2">0 kg (0.00 kg)</b></div>
+    <div class="row"><span>間紙</span><b id="paperResult2">0 kg (0.00 kg)</b></div>
+    <div class="row"><span>テープ</span><b id="tapeResult2">0 kg (0.00 kg)</b></div>
+    <div class="total"><small>合計控除重量②</small><b id="deductResult2">0 kg (0.00 kg)</b></div>
+  </div>
+</div>
+<div id="message"></div>
+<button id="calc" type="button">①を計算</button>
+</section>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+
+// 紙管・パイプリング比重表
+const tubeCoeff={
+ normal:{300:0.0168,400:0.0216,500:0.0270},
+ normal10:{300:0.0084},
+ hard:{300:0.0178,400:0.0220,500:0.0310},
+ hard15:{300:0.0128,500:0.0223},
+ hard10:{300:0.0089,500:0.0148},
+ ring:{300:0.0556,400:0.0615,500:0.0785}
+};
+
+// 換算表の重量列
+const cols=[50,100,200,300,400,500,600,700,800,900,1000];
+
+// 間紙換算質量表
+const PAPER={
+"0.10":[1.8,3.5,7.0,10.5,14.0,17.5,21.0,24.5,28.0,31.5,35.0],
+"0.12":[1.5,2.9,5.8,8.7,11.6,14.5,17.4,20.3,23.2,26.1,29.2],
+"0.15":[1.2,2.3,4.7,7.0,9.3,11.7,14.0,16.3,18.7,21.0,23.3],
+"0.18":[1.0,1.9,3.6,5.8,7.8,9.7,11.7,13.6,15.6,17.5,19.4],
+"0.20":[0.9,1.7,3.4,5.1,6.8,8.5,10.2,11.9,13.6,15.3,17.0],
+"0.25":[0.7,1.4,2.7,4.1,5.4,6.8,8.2,9.5,10.9,12.3,13.6],
+"0.30":[0.6,1.1,2.3,3.4,4.5,5.7,6.8,8.0,9.1,10.2,11.4],
+"0.35":[0.5,1.0,1.9,2.9,3.9,4.7,5.8,6.8,7.8,8.8,9.7],
+"0.40":[0.4,0.9,1.7,2.6,3.4,4.3,5.1,6.0,6.8,7.7,8.5],
+"0.45":[0.4,0.8,1.5,2.3,3.0,3.8,4.5,5.3,6.0,6.8,7.6],
+"0.50":[0.3,0.7,1.4,2.0,2.7,3.4,4.1,4.8,5.5,6.1,6.8],
+"0.60":[0.3,0.6,1.1,1.7,2.3,2.8,3.4,4.0,4.5,5.1,5.7],
+"0.70":[0.2,0.5,1.0,1.5,1.9,2.4,2.9,3.4,3.9,4.4,4.9],
+"0.80":[0.2,0.4,0.9,1.3,1.7,2.1,2.6,3.0,3.4,3.8,4.3],
+"1.00":[0.2,0.3,0.7,1.0,1.4,1.7,2.1,2.4,2.7,3.1,3.4],
+"1.20":[0.1,0.3,0.6,0.9,1.1,1.4,1.7,2.0,2.3,2.6,2.8],
+"1.40":[0.1,0.2,0.5,0.7,1.0,1.2,1.5,1.7,1.9,2.2,2.4],
+"1.60":[0.1,0.2,0.4,0.6,0.9,1.1,1.3,1.5,1.7,1.9,2.1],
+"2.00":[0.1,0.2,0.4,0.5,0.7,0.9,1.1,1.2,1.4,1.6,1.8]
+};
+
+const SPV={
+"0.20":[4.70,9.30,18.60,27.90,37.30,46.60,55.90,65.20,74.50,83.90,93.20],
+"0.30":[3.20,6.40,12.80,19.30,25.70,32.20,38.60,45.00,51.50,57.90,64.40],
+"0.40":[2.40,4.90,9.80,14.60,19.60,24.40,29.30,34.20,39.00,44.00,48.80],
+"0.50":[2.00,4.00,7.90,11.80,15.80,19.70,23.70,27.60,31.50,35.50,39.40],
+"0.60":[1.70,3.30,6.60,10.00,13.30,16.60,19.90,23.20,26.60,29.90,33.20],
+"0.70":[1.40,2.90,5.70,8.60,11.40,14.30,17.20,20.00,22.90,25.70,28.60],
+"0.80":[1.30,2.50,5.10,7.60,10.10,12.60,15.10,17.70,20.20,22.70,25.20],
+"0.90":[1.10,2.30,4.40,6.60,8.80,11.10,13.20,15.50,17.70,19.90,22.20],
+"1.00":[1.00,2.00,4.00,6.00,8.10,10.10,12.10,14.10,16.10,18.10,20.20],
+"1.20":[0.90,1.70,3.40,5.10,6.80,8.50,10.20,11.90,13.60,15.30,17.00],
+"1.40":[0.70,1.50,2.60,4.30,5.70,7.20,8.60,10.00,11.50,12.80,14.30],
+"1.60":[0.60,1.30,2.50,3.80,5.00,6.30,7.60,8.80,10.10,11.40,12.60]
+};
+const SPH={
+"0.20":[3.00,6.00,11.80,17.70,23.60,29.50,35.40,41.30,47.20,53.10,59.00],
+"0.30":[2.00,4.00,7.80,11.80,15.70,19.70,23.60,27.50,31.40,35.40,39.40],
+"0.40":[1.50,3.00,6.00,8.80,11.80,14.70,17.70,20.60,23.60,26.50,29.50],
+"0.50":[1.20,2.40,4.80,7.20,9.60,12.00,14.40,16.80,19.20,21.60,24.00],
+"0.60":[1.00,2.00,4.00,6.00,7.80,9.80,11.80,13.80,15.70,17.70,19.70],
+"0.70":[0.80,1.70,3.40,5.10,6.80,8.60,10.30,12.00,13.70,15.40,17.20],
+"0.80":[0.70,1.40,3.00,4.40,6.00,7.40,8.80,10.30,11.80,13.30,14.80],
+"0.90":[0.60,1.30,2.60,4.00,5.20,6.50,7.80,9.10,10.40,11.70,13.00],
+"1.00":[0.60,1.20,2.40,3.60,4.80,6.00,7.20,8.40,9.60,10.80,12.00],
+"1.20":[0.50,1.00,2.00,3.00,4.00,5.00,6.00,7.00,7.80,9.00,10.00],
+"1.40":[0.40,0.80,1.70,2.50,3.40,4.30,5.10,6.00,6.80,7.70,8.60],
+"1.60":[0.30,0.70,1.40,2.20,3.00,3.70,4.40,5.10,6.00,6.60,7.40]
+};
+const SPE={
+"0.20":[2.00,3.60,7.20,11.00,14.40,18.00,21.60,25.20,28.80,32.40,36.00],
+"0.30":[1.20,2.40,4.80,7.20,9.60,12.00,14.40,16.80,19.20,21.60,24.00],
+"0.40":[1.00,1.80,3.60,5.40,7.20,9.00,10.80,12.60,14.40,16.20,18.00],
+"0.50":[0.70,1.50,3.00,4.30,5.70,7.20,8.60,10.00,11.50,13.00,14.40],
+"0.60":[0.60,1.20,2.40,3.60,4.80,6.00,7.20,8.40,9.60,10.80,12.00],
+"0.70":[0.50,1.00,2.00,3.00,4.00,5.20,6.20,7.30,8.30,9.30,10.40],
+"0.80":[0.40,1.00,1.80,2.70,3.60,4.50,5.40,6.30,7.20,8.10,9.00],
+"0.90":[0.40,0.90,1.70,2.60,3.40,4.40,5.30,6.20,7.00,7.90,8.80],
+"1.00":[0.40,0.80,1.60,2.40,3.20,4.00,4.80,5.60,6.40,7.20,8.00],
+"1.20":[0.30,0.70,1.40,2.10,2.80,3.00,3.60,4.20,4.80,5.40,6.00],
+"1.40":[0.20,0.50,1.00,1.50,2.00,2.60,3.10,3.60,4.10,4.60,5.20],
+"1.60":[0.20,0.40,0.90,1.30,1.80,2.20,2.70,3.10,3.60,4.00,4.50]
+};
+
+function nearestKey(table,t){
+ // 現場指定：製品厚み0.38mmは0.35mmの換算表で計算する
+ if(Math.abs(Number(t)-0.38)<0.000001 && Object.prototype.hasOwnProperty.call(table,"0.35")){
+   return 0.35;
+ }
+ const ks=Object.keys(table).map(Number);
+ return ks.reduce((a,b)=>Math.abs(b-t)<Math.abs(a-t)?b:a);
+}
+function valueAt(table,key,kg){
+ const row=table[Number(key).toFixed(2)]||table[String(key)];
+ const idx=cols.indexOf(kg);
+ return idx>=0?row[idx]:0;
+}
+// 例 1530 = 1000 + 500 + 300の1/10
+function calcByTable(table,t,total){
+ const key=nearestKey(table,t);
+ let rem=Math.max(0,total), sum=0, detail=[];
+ const major=[1000,900,800,700,600,500,400,300,200,100,50];
+ for(const kg of major){
+   while(rem>=kg-1e-9){
+     sum+=valueAt(table,key,kg);
+     detail.push(kg+"kg");
+     rem-=kg;
+   }
+ }
+ if(rem>0.0001){
+   const ten=Math.round(rem/10)*10;
+   if(ten>=10 && ten<=100 && Math.abs(rem-ten)<0.001){
+     const ref=ten*10;
+     sum+=valueAt(table,key,ref)*0.1;
+     detail.push(ref+"kgの1/10");
+     rem=0;
+   }else{
+     sum+=valueAt(table,key,50)*(rem/50);
+     detail.push(rem.toFixed(1)+"kg比例");
+     rem=0;
+   }
+ }
+ return {value:sum,key,detail:detail.join(" + ")};
+}
+
+function updateTube(){
+ const type=$("tubeType").value;
+ const dia=$("diameter");
+ const current=dia.value;
+
+ const valid={
+   none:[300,400,500],
+   normal:[300,400,500],
+   normal10:[300],
+   hard:[300,400,500],
+   hard15:[300,500],
+   hard10:[300,500],
+   ring:[300,400,500]
+ }[type] || [300,400,500];
+
+ dia.innerHTML=valid.map(d=>`<option value="${d}">φ${d}</option>`).join("");
+ if(valid.map(String).includes(current)){
+   dia.value=current;
+ }else{
+   dia.value=String(valid[0]);
+ }
+
+ const c=(tubeCoeff[type]||{})[dia.value];
+ $("tubeHint").textContent=
+   type==="none" ? "なし" :
+   c!==undefined ? `係数 ${c} × 製品幅(mm)` :
+   "この種類・内径の組み合わせは係数未登録です";
+}
+$("tubeType").addEventListener("change",updateTube);
+$("diameter").addEventListener("change",updateTube);
+
+function syncPaperTape(){
+ const paperUse=$("paperUse").value;
+ const tapeEl=$("tapeType");
+ if(paperUse==="use"){
+   tapeEl.value="none";
+   tapeEl.disabled=true;
+   tapeEl.style.opacity="0.55";
+ }else{
+   tapeEl.disabled=false;
+   tapeEl.style.opacity="1";
+ }
+}
+
+function calcOne(width,total,index){
+ const thick=Number($("thickness").value);
+ const type=$("tubeType").value, dia=Number($("diameter").value);
+ const coef=(tubeCoeff[type]||{})[dia];
+
+ const tube=type==="none"?0:coef*width;
+
+ let paperW=0, tapeW=0;
+ if($("paperUse").value==="use"){
+   paperW=calcByTable(PAPER,thick,total).value;
+ }
+
+ const tapeType=$("tapeType").value;
+ if(["SPV","SPH","SPE"].includes(tapeType)){
+   tapeW=calcByTable({SPV,SPH,SPE}[tapeType],thick,total).value;
+ }
+
+ const tubeRounded=Math.round(tube);
+ const paperRounded=Math.round(paperW);
+ const tapeRounded=Math.round(tapeW);
+ const deduct=tubeRounded+paperRounded+tapeRounded;
+ const deductRaw=tube+paperW+tapeW;
+
+ function fmt(v){
+   return Math.round(v)+" kg ("+v.toFixed(2)+" kg)";
+ }
+
+ $(`tubeResult${index}`).textContent=fmt(tube);
+ $(`paperResult${index}`).textContent=fmt(paperW);
+ $(`tapeResult${index}`).textContent=fmt(tapeW);
+ $(`deductResult${index}`).textContent=deduct+" kg ("+deductRaw.toFixed(2)+" kg)";
+}
+
+function clearResult(index){
+ $(`tubeResult${index}`).textContent="0 kg (0.00 kg)";
+ $(`paperResult${index}`).textContent="0 kg (0.00 kg)";
+ $(`tapeResult${index}`).textContent="0 kg (0.00 kg)";
+ $(`deductResult${index}`).textContent="0 kg (0.00 kg)";
+}
+
+let calcStage=1;
+
+function validateCommon(){
+ const thick=Number($("thickness").value);
+ const msg=$("message"); msg.className="";
+ if(!(thick>0)){
+   msg.textContent="厚みを入力してください。";
+   msg.className="err"; return false;
+ }
+ if($("paperUse").value===""){
+   msg.textContent="間紙を選択してください。";
+   msg.className="err"; return false;
+ }
+ syncPaperTape();
+ if($("paperUse").value!=="use" && $("tapeType").value===""){
+   msg.textContent="テープを選択してください。";
+   msg.className="err"; return false;
+ }
+ const type=$("tubeType").value, dia=Number($("diameter").value);
+ const coef=(tubeCoeff[type]||{})[dia];
+ if(type!=="none" && coef===undefined){
+   msg.textContent="選択した紙管・鉄リングと内径の係数がありません。";
+   msg.className="err"; return false;
+ }
+ return true;
+}
+
+function openSecondWidth(){
+ const w2=$("width2");
+ w2.scrollIntoView({behavior:"smooth",block:"center"});
+ setTimeout(()=>{
+   w2.click();
+ },450);
+}
+
+function calc(){
+ const msg=$("message"); msg.className="";
+ if(!validateCommon()) return;
+
+ if(calcStage===1){
+   const w1=Number($("width1").value);
+   const t1=Number($("totalKg1").value);
+   if(!(w1>0) || !(t1>0)){
+     msg.textContent="幅①・総重量①を入力してください。";
+     msg.className="err"; return;
+   }
+   calcOne(w1,t1,1);
+   clearResult(2);
+   calcStage=2;
+   $("calc").textContent="②を計算";
+   // ②では紙あり/なし・テープを改めて選べるようにする
+   $("paperUse").value="";
+   $("tapeType").disabled=false;
+   $("tapeType").style.opacity="1";
+   $("tapeType").value="";
+   msg.textContent="①を計算しました。結果を10秒表示します。10秒後に幅②へ進みます。";
+   msg.className="ok";
+
+   let remain=10;
+   const timer=setInterval(()=>{
+     remain--;
+     if(remain>0){
+       msg.textContent=`①を計算しました。結果を確認してください。あと${remain}秒で幅②へ進みます。`;
+     }else{
+       clearInterval(timer);
+       msg.textContent="②を入力してください。幅②からスタートします。";
+       msg.className="ok";
+       openSecondWidth();
+     }
+   },1000);
+   return;
+ }
+
+ const w2=Number($("width2").value);
+ const t2=Number($("totalKg2").value);
+ if(!(w2>0) || !(t2>0)){
+   msg.textContent="幅②・総重量②を入力してください。";
+   msg.className="err"; return;
+ }
+ calcOne(w2,t2,2);
+ msg.textContent="②を計算しました。結果を10秒表示します。10秒後に幅①へ戻ります。";
+ msg.className="ok";
+
+ let remain2=10;
+ const timer2=setInterval(()=>{
+   remain2--;
+   if(remain2>0){
+     msg.textContent=`②を計算しました。結果を確認してください。あと${remain2}秒で幅①へ戻ります。`;
+   }else{
+     clearInterval(timer2);
+
+     // 次のセット用に①②の幅・重量と結果をリセット。厚み・FNoは残す。
+     ["width1","totalKg1","width2","totalKg2"].forEach(id=>{ const el=$(id); if(el) el.value=""; });
+     clearResult(1);
+     clearResult(2);
+
+     // 条件は①から同じ流れで選び直す
+     $("tubeType").value="";
+     $("diameter").value="";
+     $("paperUse").value="";
+     $("tapeType").value="";
+     $("tapeType").disabled=false;
+     $("tapeType").style.opacity="1";
+
+     calcStage=1;
+     $("calc").textContent="①を計算";
+     msg.textContent="次の計算を開始します。幅①から入力してください。";
+     msg.className="ok";
+
+     const w1=$("width1");
+     w1.scrollIntoView({behavior:"smooth",block:"center"});
+     setTimeout(()=>w1.click(),450);
+   }
+ },1000);
+}
+$("calc").addEventListener("click",calc);
+
+["width1","totalKg1","width2","totalKg2","thickness","paperUse","tapeType"].forEach(id=>{
+ const el=$(id);
+ if(!el) return;
+ el.addEventListener("change",()=>{
+   if(id==="paperUse") syncPaperTape();
+ });
+});
+syncPaperTape();
+updateTube();
+</script>
+
+
+
+
+<div id="keypadBackdrop" class="keypad-backdrop"></div>
+<div id="customKeypad" class="keypad" aria-hidden="true">
+  <div class="keypad-head">
+    <div id="keypadTitle" class="keypad-title">数字入力</div>
+    <div id="keypadValue" class="keypad-value">0</div>
+  </div>
+  <div class="keypad-grid">
+    <button type="button" class="key" data-key="1">1</button>
+    <button type="button" class="key" data-key="2">2</button>
+    <button type="button" class="key" data-key="3">3</button>
+    <button type="button" class="key" data-key="4">4</button>
+    <button type="button" class="key" data-key="5">5</button>
+    <button type="button" class="key" data-key="6">6</button>
+    <button type="button" class="key" data-key="7">7</button>
+    <button type="button" class="key" data-key="8">8</button>
+    <button type="button" class="key" data-key="9">9</button>
+    <button type="button" class="key" data-key=".">.</button>
+    <button type="button" class="key" data-key="0">0</button>
+    <button type="button" class="key action" data-key="back">⌫</button>
+    <button type="button" class="key action" data-key="clear">クリア</button>
+    <button type="button" class="key done" data-key="done">完了</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const ids=["thickness","width1","totalKg1","width2","totalKg2"];
+  const labels={
+    thickness:"製品厚み（mm）",
+    width1:"製品幅①（mm）",
+    totalKg1:"総重量①（kg）",
+    width2:"製品幅②（mm）",
+    totalKg2:"総重量②（kg）"
+  };
+  const colors={
+    thickness:"#f2994a",
+    width1:"#27ae60",
+    totalKg1:"#2f80ed",
+    width2:"#27ae60",
+    totalKg2:"#2f80ed"
+  };
+  const pad=document.getElementById("customKeypad");
+  const back=document.getElementById("keypadBackdrop");
+  const title=document.getElementById("keypadTitle");
+  const display=document.getElementById("keypadValue");
+  let target=null;
+
+  function sync(){
+    display.textContent=(target && target.value) ? target.value : "0";
+    if(target){
+      display.style.borderColor=colors[target.id]||"#dce2eb";
+      title.style.color=colors[target.id]||"#172033";
+    }
+  }
+  function openPad(el){
+    target=el;
+    title.textContent=labels[el.id]||"数字入力";
+    pad.classList.add("open");
+    back.classList.add("open");
+    pad.setAttribute("aria-hidden","false");
+    sync();
+  }
+  function closePad(){
+    pad.classList.remove("open");
+    back.classList.remove("open");
+    pad.setAttribute("aria-hidden","true");
+    if(target){
+      target.dispatchEvent(new Event("change",{bubbles:true}));
+    }
+    target=null;
+  }
+
+  ids.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.addEventListener("click",()=>openPad(el));
+    el.addEventListener("focus",e=>{ e.target.blur(); openPad(el); });
+  });
+
+  back.addEventListener("click",closePad);
+
+  // 入力・選択の流れ：
+  // ①：厚み → 幅① → 総重量① → 条件 → 計算①
+  // ②：計算①完了後 → 幅② → 総重量② → 紙管・鉄リング → 間紙 → 計算②
+  const tubeTypeEl=document.getElementById("tubeType");
+  const diameterEl=document.getElementById("diameter");
+  const paperUseEl=document.getElementById("paperUse");
+  const tapeTypeEl=document.getElementById("tapeType");
+  const calcBtnEl=document.getElementById("calc");
+
+  function moveTo(el){
+    if(!el) return;
+    el.scrollIntoView({behavior:"smooth",block:"center"});
+    el.style.outline="4px solid #2f80ed";
+    el.style.outlineOffset="3px";
+    setTimeout(()=>{
+      try{ el.focus({preventScroll:true}); }catch(_){}
+      setTimeout(()=>{
+        el.style.outline="";
+        el.style.outlineOffset="";
+      },900);
+    },220);
+  }
+
+  if(tubeTypeEl){
+    tubeTypeEl.addEventListener("change",()=>moveTo(diameterEl));
+  }
+  if(diameterEl){
+    diameterEl.addEventListener("change",()=>moveTo(paperUseEl));
+  }
+  if(paperUseEl){
+    paperUseEl.addEventListener("change",()=>{
+      syncPaperTape();
+      if(paperUseEl.value==="use") moveTo(calcBtnEl);
+      else if(paperUseEl.value==="none") moveTo(tapeTypeEl);
+    });
+  }
+  if(tapeTypeEl){
+    tapeTypeEl.addEventListener("change",()=>moveTo(calcBtnEl));
+  }
+
+  pad.addEventListener("click",e=>{
+    const b=e.target.closest("[data-key]");
+    if(!b || !target) return;
+    const k=b.dataset.key;
+    let v=target.value||"";
+
+    if(k==="done"){
+      const currentId = target.id;
+      closePad();
+
+      if(currentId==="thickness"){
+        setTimeout(()=>openPad(document.getElementById("width1")),120);
+      }else if(currentId==="width1"){
+        setTimeout(()=>openPad(document.getElementById("totalKg1")),120);
+      }else if(currentId==="totalKg1"){
+        setTimeout(()=>{const a=document.getElementById("tubeButtons");if(a)a.scrollIntoView({behavior:"smooth",block:"center"});},120);
+      }else if(currentId==="width2"){
+        setTimeout(()=>openPad(document.getElementById("totalKg2")),120);
+      }else if(currentId==="totalKg2"){
+        setTimeout(()=>{const a=document.getElementById("tubeButtons");if(a)a.scrollIntoView({behavior:"smooth",block:"center"});},120);
+      }
+      return;
+    }
+    if(k==="clear"){ target.value=""; sync(); return; }
+    if(k==="back"){ target.value=v.slice(0,-1); sync(); return; }
+
+    if(k==="."){
+      if(v.includes(".")) return;
+      target.value = v ? v+"." : "0.";
+      sync();
+      return;
+    }
+
+    // 先頭の0を自然に処理
+    if(v==="0") v="";
+    // 最大桁数を軽く制限
+    const maxLen = target.id==="thickness" ? 6 : 7;
+    if(v.length>=maxLen) return;
+    target.value=v+k;
+    sync();
+  });
+})();
+</script>
+
+<script>
+
+function openTubeQuickPicker(){
+  const picker=document.getElementById("tubeQuickPicker");
+  const back=document.getElementById("tubeQuickBackdrop");
+  const tube=document.getElementById("tubeType");
+  if(!picker || !back || !tube) return;
+  tube.scrollIntoView({behavior:"smooth",block:"center"});
+  tube.style.outline="4px solid #2f80ed";
+  tube.style.outlineOffset="3px";
+  picker.classList.add("open");
+  back.classList.add("open");
+}
+function closeTubeQuickPicker(){
+  const picker=document.getElementById("tubeQuickPicker");
+  const back=document.getElementById("tubeQuickBackdrop");
+  const tube=document.getElementById("tubeType");
+  if(picker) picker.classList.remove("open");
+  if(back) back.classList.remove("open");
+  if(tube){ tube.style.outline=""; tube.style.outlineOffset=""; }
+}
+document.addEventListener("DOMContentLoaded",()=>{
+  const picker=document.getElementById("tubeQuickPicker");
+  const back=document.getElementById("tubeQuickBackdrop");
+  const tube=document.getElementById("tubeType");
+  if(picker && tube){
+    picker.addEventListener("click",e=>{
+      const b=e.target.closest("button[data-value]");
+      if(!b) return;
+      tube.value=b.dataset.value;
+      closeTubeQuickPicker();
+      tube.dispatchEvent(new Event("change",{bubbles:true}));
+    });
+  }
+  if(back) back.addEventListener("click",closeTubeQuickPicker);
+});
+
+</script>
+
+<script>
+function syncChoiceButtons(id){
+ const sel=document.getElementById(id); if(!sel)return;
+ document.querySelectorAll('.choice-btn[data-target="'+id+'"]').forEach(b=>b.classList.toggle('selected',b.dataset.value===sel.value));
+}
+function refreshAllChoiceButtons(){['tubeType','diameter','paperUse','tapeType'].forEach(syncChoiceButtons);}
+document.addEventListener('DOMContentLoaded',()=>{
+ document.querySelectorAll('.choice-btn[data-target]').forEach(btn=>btn.addEventListener('click',()=>{
+   const id=btn.dataset.target, sel=document.getElementById(id); if(!sel)return;
+   sel.value=btn.dataset.value; sel.dispatchEvent(new Event('change',{bubbles:true})); refreshAllChoiceButtons();
+   const next=id==='tubeType'?'diameterButtons':id==='diameter'?'paperButtons':id==='paperUse'&&sel.value==='none'?'tapeButtons':null;
+   if(next){const el=document.getElementById(next); if(el)el.scrollIntoView({behavior:'smooth',block:'center'});}
+   else if(id==='paperUse'||id==='tapeType'){const c=document.getElementById('calc'); if(c)c.scrollIntoView({behavior:'smooth',block:'center'});}
+ }));
+ refreshAllChoiceButtons();
+});
+</script>
+
+<script>
+/* ===== ChatGPT URL自動入力 =====
+   例:
+   ?thickness=0.5&width=398&inner=500&coreType=hard&paper=none&tape=SPE&fno=60-766-20
+*/
+(function(){
+  function applyChatGPTParams(){
+    const p = new URLSearchParams(window.location.search);
+
+    // ChatGPT内ブラウザ対策：& を使わない1パラメータ形式にも対応
+    // 例: ?fill=fno:60-766-20,coil:1,t:0.2,w:54,kg:281,coreType:hard,inner:500,paper:none,tape:SPE
+    const fill = p.get("fill");
+    if (fill) {
+      const alias = {
+        fno:"fno", coil:"coilNo", coilno:"coilNo",
+        t:"thickness", thickness:"thickness",
+        w:"width", width:"width", w1:"width", width1:"width",
+        kg:"weight", weight:"weight", total:"weight", totalkg:"weight",
+        w2:"width2", width2:"width2", kg2:"weight2", weight2:"weight2",
+        core:"core", coretype:"coreType", tubetype:"tubeType",
+        inner:"inner", dia:"inner", diameter:"inner",
+        paper:"paper", tape:"tape"
+      };
+      fill.split(",").forEach(part => {
+        const i = part.indexOf(":");
+        if (i < 1) return;
+        const rawKey = part.slice(0,i).trim();
+        const rawVal = part.slice(i+1).trim();
+        const key = alias[rawKey.toLowerCase()] || rawKey;
+        if (rawVal !== "") p.set(key, rawVal);
+      });
+    }
+
+    if (![...p.keys()].length) return;
+
+    const setValue = (id, value) => {
+      if (value === null || value === undefined || value === "") return;
+      const el = document.getElementById(id);
+      if (el) el.value = value;
+    };
+
+    // 基本情報
+    setValue("fno", p.get("fno"));
+    setValue("coilNo", p.get("coilNo") || p.get("coil"));
+    setValue("thickness", p.get("thickness") || p.get("t"));
+    setValue("width1", p.get("width") || p.get("width1") || p.get("w"));
+    setValue("width2", p.get("width2") || p.get("w2"));
+
+    // 総重量がURLにある場合だけ入れる（通常は現場で手入力）
+    setValue("totalKg1", p.get("totalKg") || p.get("totalKg1") || p.get("weight"));
+    setValue("totalKg2", p.get("totalKg2") || p.get("weight2"));
+
+    // 紙管・鉄リング
+    let tube = p.get("coreType") || p.get("tubeType") || "";
+    const core = (p.get("core") || "").toUpperCase();
+
+    // coreType が無い場合だけ P/T から補助判定
+    if (!tube) {
+      if (core === "T") tube = "ring";
+      else if (core === "P") tube = "hard"; // 伝票ルール上、P＋高強度指定を主に使用
+    }
+
+    const allowedTube = ["none","normal","normal10","hard","hard10","hard15","ring"];
+    if (allowedTube.includes(tube)) {
+      setValue("tubeType", tube);
+      if (typeof updateTube === "function") updateTube();
+    }
+
+    const inner = p.get("inner") || p.get("diameter") || p.get("dia");
+    if (inner) {
+      const dia = document.getElementById("diameter");
+      if (dia && [...dia.options].some(o => o.value === String(inner))) {
+        dia.value = String(inner);
+      }
+    }
+
+    // 間紙
+    let paper = (p.get("paper") || "").toLowerCase();
+    if (["none","no","0","x","×"].includes(paper)) paper = "none";
+    if (["use","yes","1","paper"].includes(paper)) paper = "use";
+    if (paper === "none" || paper === "use") {
+      setValue("paperUse", paper);
+    }
+
+    // テープ
+    let tape = (p.get("tape") || "").toUpperCase();
+    if (["NONE","NO","0","×"].includes(tape)) tape = "none";
+    if (["SPV","SPH","SPE","none"].includes(tape)) {
+      setValue("tapeType", tape);
+    }
+
+    if (typeof syncPaperTape === "function") syncPaperTape();
+    if (typeof updateTube === "function") updateTube();
+
+    // updateTube後にも内径を再反映
+    if (inner) {
+      const dia = document.getElementById("diameter");
+      if (dia && [...dia.options].some(o => o.value === String(inner))) {
+        dia.value = String(inner);
+      }
+    }
+
+    if (typeof refreshAllChoiceButtons === "function") refreshAllChoiceButtons();
+
+    const msg = document.getElementById("message");
+    if (msg) {
+      msg.textContent = "チャッピーで読み取った伝票データを入力しました。総重量を入力して計算してください。";
+      msg.className = "ok";
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", applyChatGPTParams);
+  } else {
+    applyChatGPTParams();
+  }
+})();
+</script>
+
+
+<script>
+/* ===== 携帯→iPad 無料データ中継 / MQTT-WebSocket版 =====
+   ntfy.shを使わず、EMQXのSecure WebSocket (WSS) で送受信。
+   受信コードは既存のlocalStorage値をそのまま使用するため作り直し不要。
+   MQTT 3.1.1を最小実装して外部JSライブラリにも依存しない。
+*/
+(function(){
+  var ROOM_KEY='fuutaiRelayRoomV1';
+  var LAST_KEY='fuutaiRelayLastIdV1';
+  var BROKER='wss://broker.emqx.io:8084/mqtt';
+  var ws=null,reconnectTimer=null,pingTimer=null,currentRoom='';
+
+  function qs(name){
+    var q=window.location.search.replace(/^\?/,'').split('&');
+    for(var i=0;i<q.length;i++){
+      var a=q[i].split('=');
+      if(decodeURIComponent(a[0]||'')===name){
+        try{return decodeURIComponent((a.slice(1).join('=')||'').replace(/\+/g,' '));}catch(e){return '';}
+      }
+    }
+    return '';
+  }
+  function cleanRoom(v){return String(v||'').replace(/[^A-Za-z0-9_-]/g,'').slice(0,64);}
+  function topic(room){return 'fuutai/'+cleanRoom(room).toLowerCase();}
+  function makeCode(){
+    var out='',i,n;
+    try{
+      if(window.crypto&&window.crypto.getRandomValues){
+        var a=new Uint8Array(16);window.crypto.getRandomValues(a);
+        for(i=0;i<a.length;i++)out+=('0'+a[i].toString(16)).slice(-2);
+        return out.toUpperCase();
+      }
+    }catch(e){}
+    for(i=0;i<32;i++){n=Math.floor(Math.random()*16);out+=n.toString(16);}
+    return out.toUpperCase();
+  }
+  function setText(id,t){var e=document.getElementById(id);if(e)e.textContent=t;}
+  function show(id,on){var e=document.getElementById(id);if(e)e.style.display=on?'block':'none';}
+
+  function utf8(s){
+    s=unescape(encodeURIComponent(String(s)));var a=new Uint8Array(s.length);
+    for(var i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return a;
+  }
+  function fromUtf8(a){
+    var s='',chunk=8192;
+    for(var i=0;i<a.length;i+=chunk){
+      var part=a.subarray(i,Math.min(i+chunk,a.length));
+      s+=String.fromCharCode.apply(null,part);
+    }
+    try{return decodeURIComponent(escape(s));}catch(e){return s;}
+  }
+  function twoByteString(s){
+    var b=utf8(s),o=new Uint8Array(b.length+2);o[0]=(b.length>>8)&255;o[1]=b.length&255;o.set(b,2);return o;
+  }
+  function remLen(n){
+    var out=[],d;
+    do{d=n%128;n=Math.floor(n/128);if(n>0)d|=128;out.push(d);}while(n>0);
+    return new Uint8Array(out);
+  }
+  function packet(header,parts){
+    var n=0,i;for(i=0;i<parts.length;i++)n+=parts[i].length;
+    var r=remLen(n),o=new Uint8Array(1+r.length+n),pos=0;o[pos++]=header;o.set(r,pos);pos+=r.length;
+    for(i=0;i<parts.length;i++){o.set(parts[i],pos);pos+=parts[i].length;}return o.buffer;
+  }
+  function connectPacket(clientId){
+    var vh=new Uint8Array([0,4,77,81,84,84,4,2,0,45]);
+    return packet(0x10,[vh,twoByteString(clientId)]);
+  }
+  function subscribePacket(t){
+    return packet(0x82,[new Uint8Array([0,1]),twoByteString(t),new Uint8Array([0])]);
+  }
+  function publishPacket(t,msg){
+    return packet(0x31,[twoByteString(t),utf8(msg)]); /* retain=1, QoS0 */
+  }
+  function pingPacket(){return new Uint8Array([0xC0,0]).buffer;}
+
+  function forEachPacket(data,cb){
+    var a=new Uint8Array(data),pos=0;
+    while(pos<a.length){
+      var h=a[pos++],mul=1,len=0,d;
+      do{if(pos>=a.length)return;d=a[pos++];len+=(d&127)*mul;mul*=128;}while(d&128);
+      if(pos+len>a.length)return;
+      cb(h,a.subarray(pos,pos+len));pos+=len;
+    }
+  }
+  function readPublish(body,header){
+    if(body.length<2)return '';
+    var tl=(body[0]<<8)|body[1],pos=2+tl;if(pos>body.length)return '';
+    var qos=(header>>1)&3;if(qos>0)pos+=2;if(pos>body.length)return '';
+    return fromUtf8(body.subarray(pos));
+  }
+  function clientId(prefix){return prefix+Math.random().toString(16).slice(2,10)+String(new Date().getTime()).slice(-5);}
+  function openMqtt(onConnected,onPublish,onFail){
+    var sock,done=false;
+    try{sock=new WebSocket(BROKER,['mqtt']);sock.binaryType='arraybuffer';}catch(e){onFail();return null;}
+    var timeout=setTimeout(function(){if(!done){done=true;try{sock.close();}catch(e){}onFail();}},12000);
+    sock.onopen=function(){try{sock.send(connectPacket(clientId('ft')));}catch(e){}};
+    sock.onmessage=function(ev){
+      if(!(ev.data instanceof ArrayBuffer))return;
+      forEachPacket(ev.data,function(h,b){
+        var type=h>>4;
+        if(type===2){
+          if(b.length>=2&&b[1]===0){if(!done){done=true;clearTimeout(timeout);onConnected(sock);}}
+          else if(!done){done=true;clearTimeout(timeout);onFail();}
+        }else if(type===3&&onPublish){onPublish(readPublish(b,h));}
+      });
+    };
+    sock.onerror=function(){if(!done){done=true;clearTimeout(timeout);onFail();}};
+    sock.onclose=function(){if(!done){done=true;clearTimeout(timeout);onFail();}};
+    return sock;
+  }
+
+  function showPushOverlay(text,ok){
+    var ov=document.createElement('div');ov.className='push-overlay';
+    var box=document.createElement('div');box.className='push-box';
+    var h=document.createElement('h2');h.textContent=ok?'✅ iPadへ送信しました':'⚠️ 送信できませんでした';
+    var p=document.createElement('p');p.textContent=text;
+    box.appendChild(h);box.appendChild(p);ov.appendChild(box);document.body.appendChild(ov);
+  }
+
+  function sendToIpad(push){
+    var cut=push.indexOf('|');
+    if(cut<1){showPushOverlay('受信コードがありません。',false);return;}
+    var room=cleanRoom(push.slice(0,cut)),fill=push.slice(cut+1);
+    if(!room||!fill){showPushOverlay('送信データが不足しています。',false);return;}
+    var sock=openMqtt(function(s){
+      try{
+        s.send(publishPacket(topic(room),fill));
+        showPushOverlay('数秒以内にiPadの風袋計算へ自動入力されます。この画面は閉じてOKです。',true);
+        setTimeout(function(){try{s.close();}catch(e){}},700);
+      }catch(e){showPushOverlay('通信できませんでした。もう一度リンクを押してください。',false);}
+    },null,function(){showPushOverlay('通信できませんでした。インターネット接続を確認してください。',false);});
+  }
+
+  function applyReceived(fill){
+    if(!fill)return;
+    var last='';try{last=localStorage.getItem(LAST_KEY)||'';}catch(e){}
+    if(fill===last)return;
+    try{localStorage.setItem(LAST_KEY,fill);}catch(e){}
+    setText('relayLast','受信しました。計算画面へ反映します…');
+    var base=window.location.href.split('?')[0].split('#')[0];
+    window.location.replace(base+'?fill='+encodeURIComponent(fill));
+  }
+
+  function stop(){
+    if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null;}
+    if(pingTimer){clearInterval(pingTimer);pingTimer=null;}
+    if(ws){try{ws.onclose=null;ws.close();}catch(e){}ws=null;}
+  }
+  function scheduleReconnect(room){
+    if(reconnectTimer)return;
+    reconnectTimer=setTimeout(function(){reconnectTimer=null;start(room);},4000);
+  }
+  function start(room){
+    stop();currentRoom=room;
+    setText('relayStatus','🔄 受信を接続しています…');setText('relayLast','通信を確認中…');
+    ws=openMqtt(function(s){
+      ws=s;
+      try{s.send(subscribePacket(topic(room)));}catch(e){}
+      setText('relayStatus','🟢 携帯からのデータを受信待機中');setText('relayLast','受信待機中');
+      pingTimer=setInterval(function(){try{if(ws&&ws.readyState===1)ws.send(pingPacket());}catch(e){}},20000);
+      s.onclose=function(){setText('relayStatus','🟡 再接続中…');scheduleReconnect(room);};
+      s.onerror=function(){setText('relayStatus','🟡 再接続中…');};
+    },function(msg){applyReceived(msg);},function(){
+      setText('relayStatus','🟠 接続できません（通信待ち）');setText('relayLast','数秒後に自動で再接続します…');scheduleReconnect(room);
+    });
+  }
+  function reconnectNow(){
+    var room='';try{room=localStorage.getItem(ROOM_KEY)||'';}catch(e){}
+    if(!room){setText('relayStatus','iPadの受信設定はまだです');return;}
+    start(room);
+  }
+  function render(){
+    var room='';try{room=localStorage.getItem(ROOM_KEY)||'';}catch(e){}
+    if(!room){setText('relayStatus','iPadの受信設定はまだです');show('relaySetup',true);show('relayReady',false);return;}
+    setText('relayCode',room);show('relaySetup',false);show('relayReady',true);start(room);
+  }
+
+  document.addEventListener('DOMContentLoaded',function(){
+    var push=qs('push');if(push){sendToIpad(push);return;}
+    var make=document.getElementById('makeRelayCode'),reset=document.getElementById('resetRelayCode'),copy=document.getElementById('copyRelayCode'),reconnect=document.getElementById('reconnectRelay');
+    if(make)make.addEventListener('click',function(){var c=makeCode();try{localStorage.setItem(ROOM_KEY,c);localStorage.removeItem(LAST_KEY);}catch(e){}render();});
+    if(reset)reset.addEventListener('click',function(){if(!window.confirm('受信コードを作り直しますか？ 携帯のChatGPTにも新しいコードを伝え直す必要があります。'))return;var c=makeCode();try{localStorage.setItem(ROOM_KEY,c);localStorage.removeItem(LAST_KEY);}catch(e){}render();});
+    if(reconnect)reconnect.addEventListener('click',reconnectNow);
+    if(copy)copy.addEventListener('click',function(){
+      var e=document.getElementById('relayCode');if(!e)return;var range=document.createRange();range.selectNodeContents(e);var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+      var ok=false;try{ok=document.execCommand('copy');}catch(err){}setText('relayLast',ok?'受信コードをコピーしました。携帯のChatGPTへ貼り付けてください。':'コードを長押ししてコピーしてください。');
+    });
+    render();
+    window.addEventListener('online',reconnectNow);window.addEventListener('pageshow',reconnectNow);
+    document.addEventListener('visibilitychange',function(){if(!document.hidden)reconnectNow();});
+  });
+})();
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("./sw.js").catch(function(){});
+  });
+}
+</script>
+
+<div id="tubeQuickBackdrop" class="quick-picker-backdrop"></div>
+<div id="tubeQuickPicker" class="quick-picker" aria-modal="true" role="dialog">
+  <h3>紙管・鉄リングの種類を選択</h3>
+  <div class="quick-picker-grid">
+    <button type="button" data-value="none">なし</button>
+    <button type="button" data-value="normal">普通紙管</button>
+    <button type="button" data-value="normal10">普通紙管 10mm</button>
+    <button type="button" data-value="hard">硬強度紙管</button>
+    <button type="button" data-value="hard10">硬強度紙管 10mm</button>
+    <button type="button" data-value="hard15">硬強度紙管 15mm</button>
+    <button type="button" data-value="ring">鉄リング</button>
+  </div>
+</div>
+
+</body>
+</html>
